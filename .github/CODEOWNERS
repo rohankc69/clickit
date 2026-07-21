@@ -1,0 +1,25 @@
+# Review is requested automatically from the owners listed here whenever a
+# pull request touches a matching path.
+#
+# The last matching pattern wins, so the more specific entries below override
+# the catch-all.
+
+* @rohankc69
+
+# Anything that changes what Clickit records, where it stores it, or what
+# leaves the machine. These carry the privacy commitments in PRIVACY.md, and a
+# change here is a change to the promises made to users.
+/Clickit/Services/       @rohankc69
+/Clickit/Models/         @rohankc69
+/PRIVACY.md              @rohankc69
+/SECURITY.md             @rohankc69
+
+# Permissions, entitlements and the shortcut registration, which decide what
+# Clickit is allowed to do to the rest of the system.
+/Clickit/Resources/      @rohankc69
+
+# Build, release and automation. A change here can alter what ships to users
+# without touching a line of application code.
+/.github/                @rohankc69
+/scripts/                @rohankc69
+/Clickit.xcodeproj/      @rohankc69
