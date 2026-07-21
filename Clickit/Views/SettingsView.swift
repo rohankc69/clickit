@@ -95,9 +95,12 @@ private struct GeneralSettingsView: View {
             }
 
             Section("Startup") {
-                Toggle("Open Clickit at login", isOn: .constant(false))
-                    .disabled(true)
-                Caption("Not available yet.")
+                Toggle("Open Clickit at login", isOn: loginItemBinding)
+                if let loginItemError = environment.loginItemError {
+                    Label(loginItemError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Section {
@@ -145,6 +148,13 @@ private struct GeneralSettingsView: View {
                     environment.requestAccessibilityAccess()
                 }
             }
+        )
+    }
+
+    private var loginItemBinding: Binding<Bool> {
+        Binding(
+            get: { environment.opensAtLogin },
+            set: { environment.setOpensAtLogin($0) }
         )
     }
 

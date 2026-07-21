@@ -59,7 +59,7 @@ Phase 1 captures images already. Phase 3 makes them pleasant to work with.
 - [ ] Shortcut recorder UI in Settings, with conflict detection
 - [ ] Layout-aware key naming via `UCKeyTranslate`
 - [ ] Auto-paste after selecting an item, so Command-V is not needed. Decided on 2026-07-21 to ship this **enabled by default**. It requires Accessibility permission, which is a real trust cost for a clipboard manager, so the first-run prompt must explain precisely why it is needed and the feature must degrade to clipboard-only when permission is refused. PRIVACY.md and the README both need updating when this lands, since they currently state that Clickit requests no permissions.
-- [ ] Launch at login (`SMAppService`)
+- [x] Launch at login (`SMAppService`)
 - [ ] Excluded-applications picker instead of typed bundle identifiers
 - [ ] More reliable source-application attribution
 - [ ] Keyboard navigation polish, including verified focus behaviour in the popover

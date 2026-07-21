@@ -59,6 +59,27 @@ final class StubAccessibilityService: AccessibilityAuthorizing {
     }
 }
 
+/// Login-item state under the test's control, since a test process cannot
+/// register itself as a real login item.
+@MainActor
+final class StubLoginItemService: LoginItemManaging {
+    var isEnabled: Bool
+    /// When set, `setEnabled` throws instead of applying, standing in for macOS
+    /// refusing to register an unverifiable bundle.
+    var failure: Error?
+    private(set) var setCalls: [Bool] = []
+
+    init(isEnabled: Bool = false) {
+        self.isEnabled = isEnabled
+    }
+
+    func setEnabled(_ enabled: Bool) throws {
+        setCalls.append(enabled)
+        if let failure { throw failure }
+        isEnabled = enabled
+    }
+}
+
 /// Base class that provides a scratch image directory and isolated defaults.
 @MainActor
 class ClickitTestCase: XCTestCase {
@@ -124,7 +145,8 @@ class ClickitTestCase: XCTestCase {
     func makeEnvironment(
         settings: ClickitSettings = .default,
         pasteboard: MockPasteboardService = MockPasteboardService(),
-        accessibility: AccessibilityAuthorizing = StubAccessibilityService()
+        accessibility: AccessibilityAuthorizing = StubAccessibilityService(),
+        loginItem: LoginItemManaging = StubLoginItemService()
     ) -> AppEnvironment {
         AppEnvironment(
             settingsStore: makeSettingsStore(settings),
@@ -132,7 +154,8 @@ class ClickitTestCase: XCTestCase {
             clipboardStore: makeStore(),
             pasteboard: pasteboard,
             shortcuts: ShortcutService(),
-            accessibility: accessibility
+            accessibility: accessibility,
+            loginItem: loginItem
         )
     }
 

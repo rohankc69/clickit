@@ -39,6 +39,14 @@ struct ClickitSettings: Codable, Equatable, Sendable {
     /// install, and the user gets no hint that an update caused it.
     var hasHadAccessibilityAccess: Bool
 
+    /// Whether the default launch-at-login decision has been made.
+    ///
+    /// Launch at login is on by default, but only until the user has a say. This
+    /// latches on the first launch so the default is applied exactly once: a user
+    /// who later turns it off — here or in System Settings — is never overridden
+    /// on the next launch.
+    var hasConfiguredLoginItem: Bool
+
     /// Discard unpinned history when the Mac restarts.
     ///
     /// On by default: history is a working set for the current session at the
@@ -64,6 +72,7 @@ struct ClickitSettings: Codable, Equatable, Sendable {
         openShortcut: .default,
         autoPasteEnabled: true,
         hasHadAccessibilityAccess: false,
+        hasConfiguredLoginItem: false,
         clearHistoryOnRestart: true,
         excludedBundleIdentifiers: []
     )
@@ -108,6 +117,8 @@ extension ClickitSettings {
                 ?? fallback.autoPasteEnabled,
             hasHadAccessibilityAccess: try container.decodeIfPresent(Bool.self, forKey: .hasHadAccessibilityAccess)
                 ?? fallback.hasHadAccessibilityAccess,
+            hasConfiguredLoginItem: try container.decodeIfPresent(Bool.self, forKey: .hasConfiguredLoginItem)
+                ?? fallback.hasConfiguredLoginItem,
             clearHistoryOnRestart: try container.decodeIfPresent(Bool.self, forKey: .clearHistoryOnRestart)
                 ?? fallback.clearHistoryOnRestart,
             excludedBundleIdentifiers: try container.decodeIfPresent([String].self, forKey: .excludedBundleIdentifiers)

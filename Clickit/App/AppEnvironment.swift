@@ -27,6 +27,7 @@ final class AppEnvironment {
     @ObservationIgnored private let sessionReset: SessionResetService
     @ObservationIgnored private let shortcuts: GlobalShortcutRegistering
     @ObservationIgnored private let accessibility: AccessibilityAuthorizing
+    @ObservationIgnored private let loginItem: LoginItemManaging
 
     /// Read fresh each time rather than cached: the user can grant or revoke it
     /// in System Settings while Clickit is running, and a stale answer would
@@ -82,6 +83,56 @@ final class AppEnvironment {
               !settingsStore.settings.hasHadAccessibilityAccess
         else { return }
         settingsStore.settings.hasHadAccessibilityAccess = true
+    }
+
+    // MARK: - Launch at login
+
+    /// Whether macOS launches Clickit when the user logs in.
+    ///
+    /// Read live from the system, which owns this state: the user can also change
+    /// it in System Settings, and Clickit should reflect that rather than a cached
+    /// copy.
+    var opensAtLogin: Bool { loginItem.isEnabled }
+
+    /// Shown in Settings next to the toggle when macOS refuses the change, the
+    /// same way `shortcutError` reports a shortcut that could not be claimed.
+    var loginItemError: String?
+
+    /// Turns launch at login on or off at the user's request.
+    ///
+    /// The system owns the actual state, so a failure leaves the toggle
+    /// reflecting reality rather than a value that never took. Marking the item
+    /// configured retires the first-launch default: from here on this is the
+    /// user's choice.
+    func setOpensAtLogin(_ enabled: Bool) {
+        settingsStore.settings.hasConfiguredLoginItem = true
+        do {
+            try loginItem.setEnabled(enabled)
+            loginItemError = nil
+            ClickitLog.app.notice("Launch at login \(enabled ? "enabled" : "disabled", privacy: .public)")
+        } catch {
+            ClickitLog.app.error(
+                "Could not \(enabled ? "enable" : "disable", privacy: .public) launch at login: \(error.localizedDescription, privacy: .public)"
+            )
+            loginItemError = "macOS would not change the login item. \(error.localizedDescription)"
+        }
+    }
+
+    /// Applies the default — on — exactly once, on the first launch.
+    ///
+    /// After the latch is set it never runs again, so a user who turns it off is
+    /// not fought on the next launch. A failure here is not fatal: the toggle in
+    /// Settings still works, and an unsigned build macOS will not verify is the
+    /// usual reason it cannot register itself.
+    private func applyDefaultLoginItemIfNeeded() {
+        guard !settingsStore.settings.hasConfiguredLoginItem else { return }
+        settingsStore.settings.hasConfiguredLoginItem = true
+        do {
+            try loginItem.setEnabled(true)
+            ClickitLog.app.notice("Enabled launch at login by default")
+        } catch {
+            ClickitLog.app.error("Could not enable launch at login by default: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Dismissed for this launch only. A permission the user has chosen to
@@ -180,13 +231,15 @@ final class AppEnvironment {
         pasteboard: PasteboardServicing = PasteboardService(),
         shortcuts: GlobalShortcutRegistering = ShortcutService(),
         sessionReset: SessionResetService = SessionResetService(),
-        accessibility: AccessibilityAuthorizing = AccessibilityService()
+        accessibility: AccessibilityAuthorizing = AccessibilityService(),
+        loginItem: LoginItemManaging = LoginItemService()
     ) {
         self.settingsStore = settingsStore
         self.pasteboard = pasteboard
         self.shortcuts = shortcuts
         self.sessionReset = sessionReset
         self.accessibility = accessibility
+        self.loginItem = loginItem
 
         let resolvedImageStorage = imageStorage ?? Self.makeImageStorage()
         self.imageStorage = resolvedImageStorage
@@ -274,6 +327,7 @@ final class AppEnvironment {
         // Before cleanup: a restart discards the whole unpinned working set, so
         // there is no point ageing out items that are about to be dropped.
         sessionReset.resetIfSystemRestarted(store: clipboardStore, settings: settingsStore.settings)
+        applyDefaultLoginItemIfNeeded()
         refreshAccessibilityState()
         logDiagnosticState()
         runCleanup()
