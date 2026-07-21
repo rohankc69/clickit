@@ -5,9 +5,9 @@ All notable changes to Clickit are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Clickit has not had a tagged release yet. Everything below is unreleased.
+## [0.1.0] - 2026-07-21
 
-## [Unreleased]
+First tagged release. Unsigned: see README for opening it.
 
 ### Added
 
@@ -59,7 +59,7 @@ Initial implementation, covering roadmap Phases 1 and 2.
 - Menu-bar icon reflects whether monitoring is active or paused
 - Compact popover with search, history list, and footer actions; dismisses on click-outside, with animation disabled so it opens instantly
 - Right-click menu on the menu-bar icon for pause, settings and quit
-- Settings window with General, Retention and Privacy tabs
+- Settings window with General, Shortcuts, History and Privacy panes, in a preference-style toolbar
 
 **Clipboard monitoring**
 
@@ -81,7 +81,7 @@ Initial implementation, covering roadmap Phases 1 and 2.
 - Pin and delete individual items
 - Clear history, keeping pinned items by default
 - Pause and resume monitoring
-- Restoring an item writes it back to the system clipboard for the user to paste with Command-V; Clickit never simulates a paste keystroke and therefore needs no Accessibility permission
+- Restoring an item writes it back to the system clipboard. With Accessibility access it is also pasted for you; without it you press Command-V yourself
 
 **Storage**
 
