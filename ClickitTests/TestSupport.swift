@@ -47,6 +47,16 @@ final class StubAccessibilityService: AccessibilityAuthorizing {
     func requestAccess() {
         requestCount += 1
     }
+
+    /// Mirrors the real reset: the record goes away, so the next request is
+    /// treated as a first one.
+    var resetSucceeds = true
+    private(set) var resetCount = 0
+
+    func resetAuthorization() -> Bool {
+        resetCount += 1
+        return resetSucceeds
+    }
 }
 
 /// Base class that provides a scratch image directory and isolated defaults.

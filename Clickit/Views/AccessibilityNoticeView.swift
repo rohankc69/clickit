@@ -8,6 +8,10 @@ import SwiftUI
 struct AccessibilityNoticeView: View {
     @Bindable var environment: AppEnvironment
 
+    /// Set once the repair is done. The grant cannot take effect until Clickit
+    /// starts again, because the trust answer is cached for the process.
+    @State private var needsRelaunch = false
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -15,16 +19,21 @@ struct AccessibilityNoticeView: View {
                 .foregroundStyle(.orange)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(title)
+                Text(needsRelaunch ? "Almost done" : title)
                     .font(.system(size: 12, weight: .medium))
-                Text(message)
+                Text(needsRelaunch ? Self.relaunchMessage : message)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 8) {
-                    Button(primaryTitle, action: primaryAction)
-                        .controlSize(.small)
+                    if needsRelaunch {
+                        Button("Reopen Clickit") { AccessibilityService.relaunch() }
+                            .controlSize(.small)
+                    } else {
+                        Button(primaryTitle, action: primaryAction)
+                            .controlSize(.small)
+                    }
                     Button("Not Now") {
                         environment.isAccessibilityNoticeDismissed = true
                     }
@@ -41,6 +50,9 @@ struct AccessibilityNoticeView: View {
         .background(Color.orange.opacity(0.1))
     }
 
+    private static let relaunchMessage =
+        "Approve Clickit in System Settings if asked, then reopen it so the change takes effect."
+
     private var title: String {
         switch environment.accessibilityStatus {
         case .revoked: "Pasting stopped working after an update"
@@ -51,25 +63,29 @@ struct AccessibilityNoticeView: View {
     private var message: String {
         switch environment.accessibilityStatus {
         case .revoked:
-            // The entry still looks enabled, so toggling it does nothing. Say
-            // to remove it, or the user follows a route that cannot work.
-            "Remove Clickit from Accessibility, add it again, then reopen it."
+            "The update left a permission macOS can no longer match. Repairing it takes a moment."
         case .notGranted, .satisfied:
             "Grant Accessibility access to paste picked items automatically."
         }
     }
 
-    /// A revoked grant cannot be re-requested: macOS shows its prompt only once
-    /// per application, so the only route left is System Settings.
     private var primaryTitle: String {
-        environment.accessibilityStatus == .revoked ? "Open System Settings" : "Grant Access"
+        environment.accessibilityStatus == .revoked ? "Repair" : "Grant Access"
     }
 
+    /// Repair does the whole sequence: discard the unmatched record, ask again,
+    /// and offer the relaunch that makes the answer take effect. Left to the
+    /// user, it means finding the right pane, knowing that the toggle is a
+    /// decoy, and removing an entry that looks correct.
     private func primaryAction() {
-        if environment.accessibilityStatus == .revoked {
-            AccessibilityService.openSettingsPane()
-        } else {
+        guard environment.accessibilityStatus == .revoked else {
             environment.requestAccessibilityAccess()
+            return
+        }
+        if environment.repairAccessibilityAccess() {
+            needsRelaunch = true
+        } else {
+            AccessibilityService.openSettingsPane()
         }
     }
 }

@@ -80,14 +80,14 @@ private struct GeneralSettingsView: View {
                         environment.requestAccessibilityAccess()
                     }
                 case .revoked:
-                    // The stale entry still reads as enabled, so telling the
-                    // user to remove it is the whole point of this message.
                     PermissionRow(
                         message: "Access was reset by an update",
-                        detail: "Remove Clickit from the list, add it again, then reopen it.",
-                        buttonTitle: "Open System Settings"
+                        detail: "Repair clears the record macOS can no longer match, then asks again.",
+                        buttonTitle: "Repair"
                     ) {
-                        AccessibilityService.openSettingsPane()
+                        if !environment.repairAccessibilityAccess() {
+                            AccessibilityService.openSettingsPane()
+                        }
                     }
                 }
             } header: {

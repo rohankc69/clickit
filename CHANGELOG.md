@@ -5,6 +5,13 @@ All notable changes to Clickit are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-07-21
+
+### Fixed
+
+- Accessibility access stopped working after every update, and could not be restored from System Settings. macOS pins an authorisation to the code signature that earned it; an unsigned build is identified by a hash of its own binary, so each update leaves a record that can never match. The entry stays listed and enabled, and its checkbox only flips an allow flag that is never reached
+- Clickit now detects this and repairs it: the unmatched record is discarded, access is requested again, and a relaunch is offered because the trust answer is cached for the life of the process
+
 ## [0.1.0] - 2026-07-21
 
 First tagged release. Unsigned: see README for opening it.

@@ -93,3 +93,40 @@ final class AccessibilityStatusTests: ClickitTestCase {
         XCTAssertNotNil(environment.lastErrorMessage)
     }
 }
+
+/// The repair path, which exists because the System Settings checkbox cannot
+/// fix a record whose pinned signature no longer matches the binary.
+@MainActor
+final class AccessibilityRepairTests: ClickitTestCase {
+    func testRepairClearsTheRecordAndAsksAgain() {
+        let accessibility = StubAccessibilityService(isTrusted: true)
+        let environment = makeEnvironment(accessibility: accessibility)
+        environment.refreshAccessibilityState()
+        accessibility.isTrusted = false
+        XCTAssertEqual(environment.accessibilityStatus, .revoked)
+
+        XCTAssertTrue(environment.repairAccessibilityAccess())
+
+        XCTAssertEqual(accessibility.resetCount, 1)
+        XCTAssertEqual(accessibility.requestCount, 1)
+        // Back to a first-run state, so a second failure is not misreported as
+        // another update having broken it.
+        XCTAssertFalse(environment.settingsStore.settings.hasHadAccessibilityAccess)
+        XCTAssertEqual(environment.accessibilityStatus, .notGranted)
+    }
+
+    func testAFailedResetDoesNotPromptOrRewriteState() {
+        let accessibility = StubAccessibilityService(isTrusted: true)
+        accessibility.resetSucceeds = false
+        let environment = makeEnvironment(accessibility: accessibility)
+        environment.refreshAccessibilityState()
+        accessibility.isTrusted = false
+
+        XCTAssertFalse(environment.repairAccessibilityAccess())
+
+        // Prompting after a failed reset would show nothing, since the stale
+        // record is still there. The caller falls back to System Settings.
+        XCTAssertEqual(accessibility.requestCount, 0)
+        XCTAssertTrue(environment.settingsStore.settings.hasHadAccessibilityAccess)
+    }
+}

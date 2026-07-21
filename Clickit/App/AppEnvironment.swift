@@ -37,6 +37,22 @@ final class AppEnvironment {
         accessibility.requestAccess()
     }
 
+    /// Clears the stale authorisation and immediately asks again.
+    ///
+    /// One action rather than two, because the reset on its own leaves the user
+    /// worse off than before: no record at all, and no prompt to make a new one.
+    /// Returns whether the reset worked, so the caller can fall back to sending
+    /// the user to System Settings by hand.
+    @discardableResult
+    func repairAccessibilityAccess() -> Bool {
+        guard accessibility.resetAuthorization() else { return false }
+        // Clearing the record also clears the "already asked" flag, so the
+        // system prompt can appear again.
+        accessibility.requestAccess()
+        settingsStore.settings.hasHadAccessibilityAccess = false
+        return true
+    }
+
     /// Why automatic pasting is or is not working, in the terms the user needs
     /// in order to fix it.
     enum AccessibilityStatus: Equatable {
