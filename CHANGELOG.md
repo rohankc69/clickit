@@ -23,6 +23,13 @@ Initial implementation, covering roadmap Phases 1 and 2.
 - Falls back to in-memory history with an explicit warning if the database cannot be opened, so a corrupt file costs persistence rather than the whole app
 - Write failures surface in the popover instead of being dropped
 
+**Session lifecycle**
+
+- Unpinned history is cleared when the Mac restarts, on by default and switchable in Settings. History is a working set for the current session rather than an archive, which also bounds how long a copied credential can sit on disk
+- Restarts are detected from the kernel boot time, so quitting or crashing Clickit clears nothing; only a genuine restart does
+- Pinned items are never cleared, and their image files are kept
+- Settings decode tolerantly, so adding a preference no longer resets the ones a user had already chosen
+
 **Application shell**
 
 - Menu-bar application built on `NSStatusItem` and `NSPopover`, with no Dock icon (`LSUIElement`)
@@ -76,7 +83,7 @@ Initial implementation, covering roadmap Phases 1 and 2.
 
 - Xcode project using file-system-synchronized groups, so source files join targets without `project.pbxproj` edits
 - Builds warning-free with `SWIFT_STRICT_CONCURRENCY = complete`
-- 90 unit tests covering hashing, duplicate detection, store ordering, image file lifecycle, all four retention rules, monitor behaviour, pasteboard classification against a real `NSPasteboard`, database durability, and end-to-end capture and restore
+- 101 unit tests covering hashing, duplicate detection, store ordering, image file lifecycle, all four retention rules, monitor behaviour, pasteboard classification against a real `NSPasteboard`, database durability, restart detection, and end-to-end capture and restore
 - A shared `ClipboardStoreContractTests` suite that both the SQLite and in-memory stores inherit, so the two implementations cannot diverge
 - GitHub Actions workflow building and testing on macOS
 - Documentation: README, ARCHITECTURE, ROADMAP, PRIVACY, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT

@@ -17,6 +17,13 @@ struct ClickitSettings: Codable, Equatable, Sendable {
 
     var isMonitoringPaused: Bool
 
+    /// Discard unpinned history when the Mac restarts.
+    ///
+    /// On by default: history is a working set for the current session at the
+    /// machine, not an archive. The retention windows below stay as a backstop
+    /// for machines that go weeks between restarts.
+    var clearHistoryOnRestart: Bool
+
     /// Bundle identifiers whose copies are dropped instead of recorded.
     ///
     /// - Note: Enforcement depends on `NSWorkspace.frontmostApplication`, which
@@ -31,6 +38,7 @@ struct ClickitSettings: Codable, Equatable, Sendable {
         imageRetentionDays: 7,
         pollInterval: 0.5,
         isMonitoringPaused: false,
+        clearHistoryOnRestart: true,
         excludedBundleIdentifiers: []
     )
 
@@ -40,6 +48,37 @@ struct ClickitSettings: Codable, Equatable, Sendable {
 
     func expirationDate(for type: ClipboardItemType, now: Date) -> Date {
         now.addingTimeInterval(-Double(retentionDays(for: type)) * 86_400)
+    }
+}
+
+extension ClickitSettings {
+    /// Decodes tolerantly: a field added after a user's settings were written
+    /// falls back to its default instead of failing the whole payload and
+    /// silently resetting every other preference they had chosen.
+    ///
+    /// Declared in an extension so the memberwise initialiser survives.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let fallback = ClickitSettings.default
+
+        self.init(
+            maxItems: try container.decodeIfPresent(Int.self, forKey: .maxItems)
+                ?? fallback.maxItems,
+            maxStorageBytes: try container.decodeIfPresent(Int.self, forKey: .maxStorageBytes)
+                ?? fallback.maxStorageBytes,
+            textRetentionDays: try container.decodeIfPresent(Int.self, forKey: .textRetentionDays)
+                ?? fallback.textRetentionDays,
+            imageRetentionDays: try container.decodeIfPresent(Int.self, forKey: .imageRetentionDays)
+                ?? fallback.imageRetentionDays,
+            pollInterval: try container.decodeIfPresent(TimeInterval.self, forKey: .pollInterval)
+                ?? fallback.pollInterval,
+            isMonitoringPaused: try container.decodeIfPresent(Bool.self, forKey: .isMonitoringPaused)
+                ?? fallback.isMonitoringPaused,
+            clearHistoryOnRestart: try container.decodeIfPresent(Bool.self, forKey: .clearHistoryOnRestart)
+                ?? fallback.clearHistoryOnRestart,
+            excludedBundleIdentifiers: try container.decodeIfPresent([String].self, forKey: .excludedBundleIdentifiers)
+                ?? fallback.excludedBundleIdentifiers
+        )
     }
 }
 

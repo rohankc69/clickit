@@ -98,6 +98,14 @@ private struct RetentionSettingsView: View {
                 Text("Limits")
             }
 
+            Section {
+                Toggle("Clear history when the Mac restarts", isOn: clearOnRestartBinding)
+            } footer: {
+                Text("Keeps history to the current session at this Mac. Pinned items are always kept. Quitting and relaunching Clickit does not clear anything.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Expiry") {
                 Stepper(
                     "Text and links: \(settings.textRetentionDays) days",
@@ -143,6 +151,13 @@ private struct RetentionSettingsView: View {
                 environment.settingsStore.settings[keyPath: keyPath] = newValue
                 environment.settingsChanged()
             }
+        )
+    }
+
+    private var clearOnRestartBinding: Binding<Bool> {
+        Binding(
+            get: { settings.clearHistoryOnRestart },
+            set: { environment.settingsStore.settings.clearHistoryOnRestart = $0 }
         )
     }
 

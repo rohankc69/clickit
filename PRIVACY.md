@@ -53,7 +53,9 @@ Everything is on your Mac, under:
 
 Text and metadata are stored in a local SQLite database. It is an ordinary file on your disk, readable only by your user account. It is never uploaded, never synced, and never leaves the machine.
 
-Because history now persists across restarts, what you copy is retained until the retention rules remove it: 30 days for text and links, 7 days for images, or sooner if the 1,000-item or 500 MB limits are reached. Pinned items are kept indefinitely. Clear History removes records and their image files immediately.
+History persists across quitting and relaunching Clickit, but **unpinned history is cleared when the Mac restarts** (on by default). In normal use that is what bounds how long anything is kept.
+
+If the Mac goes a long time without restarting, the retention rules take over: 30 days for text and links, 7 days for images, or sooner if the 1,000-item or 500 MB limits are reached. Pinned items are kept indefinitely and are never removed automatically. Clear History removes records and their image files immediately.
 
 Settings are stored in the standard macOS preferences domain, `com.clickit.Clickit`.
 
@@ -72,6 +74,7 @@ This restriction exists because the system log is readable by other processes on
 
 ## Controls you have
 
+- **Clear history on restart** — on by default, so unpinned history does not outlive the session. Turn it off in Settings if you want history to persist across restarts.
 - **Pause Monitoring** — stops the poll timer entirely. Nothing is captured while paused, and resuming does not retroactively pick up what you copied in the meantime.
 - **Clear History** — removes everything except pinned items. Settings also offers a destructive action that removes pinned items too.
 - **Delete individual items** — removes the record and, for images, the file on disk.

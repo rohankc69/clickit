@@ -19,7 +19,8 @@ Do not rely on Clickit as your only copy of anything.
 | Duplicate detection, search, pin, delete | Working |
 | Retention and cleanup rules | Working |
 | Image files on disk | Working |
-| History survives quit | Working |
+| History survives quitting Clickit | Working |
+| History cleared on Mac restart | Working |
 | Global shortcut | Not implemented — Phase 4 |
 | Launch at login | Not implemented — Phase 4 |
 | Excluded applications | Partial — see [Privacy](#privacy) |
@@ -39,7 +40,8 @@ Do not rely on Clickit as your only copy of anything.
 - **Duplicate-aware.** Copying the same thing twice moves the existing entry to the top instead of piling up.
 - **Pause monitoring** at any time; the menu-bar icon shows which mode you are in.
 - **Automatic cleanup** with configurable size, count and age limits.
-- **Persistent.** History is kept in a local SQLite database and survives quitting and restarting.
+- **Persistent across app restarts.** History is kept in a local SQLite database, so quitting Clickit or having it crash loses nothing.
+- **Cleared when the Mac restarts.** History is a working set for the current session, not an archive. Pinned items are always kept. This is a setting, so you can turn it off.
 - **Local only.** No network requests, no accounts, no telemetry, no AI.
 
 ## Installation
@@ -108,7 +110,13 @@ Text and metadata live in a local SQLite database. Image bytes are kept as separ
 
 The database is read into memory once at launch and kept as a write-through cache, so search stays instant while every change is committed to disk immediately. Nothing is written anywhere else on your system.
 
-### Retention defaults
+### How long history is kept
+
+Two mechanisms, in order of which one usually fires:
+
+**Restarting the Mac clears unpinned history.** This is the main lifecycle and is on by default. Clipboard history is a working set for the session you are in, and holding weeks of screenshots and text is both more than anyone reuses and more exposure than it is worth. Quitting and relaunching Clickit clears nothing — only a genuine restart does, detected by reading the system boot time.
+
+**Retention limits are the backstop**, for machines that go a long time between restarts:
 
 | Setting | Default |
 | --- | --- |
@@ -118,7 +126,7 @@ The database is read into memory once at launch and kept as a write-through cach
 | Image and screenshot retention | 7 days |
 | Pinned items | Never expire, never auto-deleted |
 
-Cleanup runs at launch, after every capture, and whenever retention settings change. It removes expired unpinned items first, then the oldest unpinned items over the count limit, then the oldest unpinned *images* over the size limit. Removing an image record always deletes its file.
+All of these are configurable in Settings, including turning off the restart behaviour. Cleanup runs at launch, after every capture, and whenever retention settings change. It removes expired unpinned items first, then the oldest unpinned items over the count limit, then the oldest unpinned *images* over the size limit. Removing an image record always deletes its file.
 
 ## Privacy
 

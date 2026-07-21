@@ -24,6 +24,7 @@ final class AppEnvironment {
     /// `self`, so it cannot be built before the other stored properties exist.
     @ObservationIgnored private(set) var monitor: ClipboardMonitor!
     @ObservationIgnored private let retention = RetentionService()
+    @ObservationIgnored private let sessionReset: SessionResetService
     @ObservationIgnored private let shortcuts: GlobalShortcutRegistering
 
     /// Surfaced in the popover rather than swallowed. Cleared on the next
@@ -43,11 +44,13 @@ final class AppEnvironment {
         imageStorage: ImageStoring? = nil,
         clipboardStore: (any ClipboardStoring)? = nil,
         pasteboard: PasteboardServicing = PasteboardService(),
-        shortcuts: GlobalShortcutRegistering = ShortcutService()
+        shortcuts: GlobalShortcutRegistering = ShortcutService(),
+        sessionReset: SessionResetService = SessionResetService()
     ) {
         self.settingsStore = settingsStore
         self.pasteboard = pasteboard
         self.shortcuts = shortcuts
+        self.sessionReset = sessionReset
 
         let resolvedImageStorage = imageStorage ?? Self.makeImageStorage()
         self.imageStorage = resolvedImageStorage
@@ -132,6 +135,9 @@ final class AppEnvironment {
         if let storeStartupError {
             lastErrorMessage = storeStartupError
         }
+        // Before cleanup: a restart discards the whole unpinned working set, so
+        // there is no point ageing out items that are about to be dropped.
+        sessionReset.resetIfSystemRestarted(store: clipboardStore, settings: settingsStore.settings)
         runCleanup()
         if !settingsStore.settings.isMonitoringPaused {
             monitor.start()

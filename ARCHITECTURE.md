@@ -218,9 +218,27 @@ Hashing is exact: case- and whitespace-sensitive. Two snippets that differ only 
 
 On capture, `AppEnvironment` asks the store to `promoteDuplicate(contentHash:at:)`. If a match exists it moves to the front and its `lastUsedAt` is refreshed while `createdAt` is preserved; otherwise the new item is inserted.
 
+## Session lifecycle
+
+History is scoped to the current session at the machine rather than kept as a permanent archive. `SessionResetService` clears unpinned items when the Mac has restarted since Clickit last ran.
+
+Restarts are detected by reading the kernel boot time (`sysctl` `KERN_BOOTTIME`) and comparing it against the value recorded at the previous launch. Boot time does not change when the app is relaunched, so quitting Clickit, or having it crash, clears nothing — only a genuine restart does. That distinction is the reason persistence and session-scoping are not in conflict.
+
+Details worth knowing:
+
+- The reset runs **before** retention cleanup. A restart discards the whole unpinned working set, so ageing out items that are about to be dropped is wasted work.
+- The boot time is recorded even when the behaviour is switched off, so re-enabling it later does not treat the running session as new and wipe history unexpectedly.
+- The first ever launch has no recorded value; it adopts the current boot time rather than clearing history the user cannot have accumulated yet.
+- Comparison uses a five-second tolerance. The reported boot time shifts slightly when the system clock is adjusted, and an exact comparison would occasionally clear history without a restart having happened.
+- If the boot time cannot be read, nothing is cleared. Failing closed here would silently destroy data.
+
+`BootTimeProviding` is a protocol so a restart can be simulated in tests without one.
+
 ## Retention cleanup
 
 `RetentionService` is stateless. Every decision derives from the store snapshot, a `ClickitSettings` value, and an injected `now`, which is what makes age-based rules testable without waiting or stubbing a global clock.
+
+These are the backstop for machines that go a long time between restarts; in normal use the session reset above is what bounds history.
 
 Rules run in order:
 
@@ -247,6 +265,7 @@ The intended implementation is Carbon's `RegisterEventHotKey`, still the only pu
 - Logs record type and byte size only. Clipboard contents are never logged, at any level, because the log stream is readable by other processes on the machine.
 - `Pause Monitoring` stops the timer entirely rather than filtering after the fact.
 - `Clear History` keeps pinned items by default; the Settings screen offers a separate destructive action that removes everything.
+- Unpinned history does not outlive a restart by default, which bounds how long a copied password or token can sit on disk.
 - Excluded applications are enforced in the monitor, before content reaches the store. Attribution is best-effort (`NSWorkspace.frontmostApplication`) and is marked as such in the UI, because it is a heuristic, not a guarantee of which process wrote to the pasteboard.
 
 ## Threading
@@ -272,7 +291,7 @@ The project rule is that errors are neither force-unwrapped away nor silently sw
 
 ## Testing strategy
 
-90 unit tests, run with `xcodebuild test`.
+101 unit tests, run with `xcodebuild test`.
 
 The system boundary is the protocol seam. `PasteboardServicing` is mocked (`MockPasteboardService`), so capture, deduplication, self-write suppression and exclusion rules are all exercised deterministically without a window server. `ImageStoring` is *not* mocked — tests use the real service pointed at a scratch directory, so file creation and deletion behaviour is genuinely verified.
 
@@ -292,6 +311,7 @@ Coverage by area:
 | `RetentionServiceTests` | Per-type expiry, count limit, size limit, pinned preservation, idempotence |
 | `ClipboardMonitorTests` | Change detection, self-write suppression, exclusions, pause baseline |
 | `PasteboardServiceTests` | Real-pasteboard classification, TIFF normalisation, do-not-record markers, write round-trips |
+| `SessionResetServiceTests` | Restart detection, pinned-item survival, image cleanup, opt-out, clock drift, unreadable boot time |
 | `AppEnvironmentTests` | End-to-end capture, classification, restore, duplicate file cleanup |
 
 Fixtures live in `ClickitTests/TestSupport.swift`. `ClickitTestCase` provides a scratch image directory and an isolated `UserDefaults` suite per test, both torn down afterwards, so the suite never touches real user data.

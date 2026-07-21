@@ -38,6 +38,7 @@ History survives quitting.
 - [x] Reconcile orphaned image files against records on startup
 - [x] Shared contract test suite, so both stores are held to identical behaviour
 - [x] Graceful fallback to in-memory history if the database cannot be opened
+- [x] Unpinned history cleared when the Mac restarts, detected from the kernel boot time, on by default and switchable in Settings
 - [ ] Benchmark search and retention at 1,000+ items
 
 Phase 2 required no changes to views, retention rules, or the monitor. That was the point of the protocol.
@@ -57,7 +58,7 @@ Phase 1 captures images already. Phase 3 makes them pleasant to work with.
 - [ ] Configurable global shortcut, implemented with `RegisterEventHotKey` (proposed default Option-V)
 - [ ] Shortcut recorder UI in Settings, with conflict detection
 - [ ] Layout-aware key naming via `UCKeyTranslate`
-- [ ] Auto-paste after selecting an item, so Command-V is not needed. Decided on 2026-07-21 to ship this **enabled by default**, matching Raycast and Paste. It requires Accessibility permission, which is a real trust cost for a clipboard manager, so the first-run prompt must explain precisely why it is needed and the feature must degrade to clipboard-only when permission is refused. PRIVACY.md and the README both need updating when this lands, since they currently state that Clickit requests no permissions.
+- [ ] Auto-paste after selecting an item, so Command-V is not needed. Decided on 2026-07-21 to ship this **enabled by default**. It requires Accessibility permission, which is a real trust cost for a clipboard manager, so the first-run prompt must explain precisely why it is needed and the feature must degrade to clipboard-only when permission is refused. PRIVACY.md and the README both need updating when this lands, since they currently state that Clickit requests no permissions.
 - [ ] Launch at login (`SMAppService`)
 - [ ] Excluded-applications picker instead of typed bundle identifiers
 - [ ] More reliable source-application attribution
