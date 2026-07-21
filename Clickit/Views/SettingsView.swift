@@ -9,10 +9,12 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             RetentionSettingsView(environment: environment)
                 .tabItem { Label("Retention", systemImage: "clock.arrow.circlepath") }
+            ShortcutsSettingsView()
+                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             PrivacySettingsView(environment: environment)
                 .tabItem { Label("Privacy", systemImage: "hand.raised") }
         }
-        .frame(width: 460, height: 340)
+        .frame(width: 460, height: 380)
     }
 }
 
@@ -223,6 +225,62 @@ private struct PrivacySettingsView: View {
 
     private func remove(_ identifier: String) {
         environment.settingsStore.settings.excludedBundleIdentifiers.removeAll { $0 == identifier }
+    }
+}
+
+/// Reference list of what the popover responds to.
+///
+/// Read-only for now: these are fixed bindings inside Clickit's own window, not
+/// system-wide hotkeys. Making them user-assignable belongs with the global
+/// shortcut work in roadmap phase 4.
+private struct ShortcutsSettingsView: View {
+    private struct Entry: Identifiable {
+        let id = UUID()
+        let keys: String
+        let action: String
+    }
+
+    private let navigation: [Entry] = [
+        Entry(keys: "Up / Down", action: "Move through history"),
+        Entry(keys: "Return", action: "Restore the selected item and close"),
+        Entry(keys: "Command-1 to 9", action: "Restore by position"),
+        Entry(keys: "Escape", action: "Clear the search, or close"),
+        Entry(keys: "Command-F", action: "Focus the search field"),
+    ]
+
+    private let actions: [Entry] = [
+        Entry(keys: "Command-P", action: "Pin or unpin the selected item"),
+        Entry(keys: "Delete", action: "Delete the selected item"),
+        Entry(keys: "Command-Delete", action: "Delete while searching"),
+        Entry(keys: "Command-K", action: "Clear history, keeping pinned items"),
+        Entry(keys: "Command-M", action: "Pause or resume monitoring"),
+        Entry(keys: "Command-Comma", action: "Open Settings"),
+        Entry(keys: "Command-Q", action: "Quit Clickit"),
+    ]
+
+    var body: some View {
+        Form {
+            Section("Navigation") {
+                ForEach(navigation, content: row)
+            }
+            Section("Actions") {
+                ForEach(actions, content: row)
+            }
+            Section {
+                UnavailableNote("These work while the popover is open. A system-wide shortcut to open Clickit from anywhere is not implemented yet. (Roadmap phase 4)")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func row(_ entry: Entry) -> some View {
+        LabeledContent {
+            Text(entry.keys)
+                .monospaced()
+                .foregroundStyle(.secondary)
+        } label: {
+            Text(entry.action)
+        }
     }
 }
 

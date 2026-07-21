@@ -1,3 +1,5 @@
+<img src="assets/clickit-icon.png" alt="Clickit" width="128" align="right">
+
 # Clickit
 
 Clickit is a lightweight, open-source clipboard-history utility for macOS. It lives in the menu bar and lets users find and reuse recently copied text, links, images, and screenshots without sending data to the cloud.
@@ -24,6 +26,7 @@ Do not rely on Clickit as your only copy of anything.
 | Global shortcut | Not implemented — Phase 4 |
 | Launch at login | Not implemented — Phase 4 |
 | Excluded applications | Partial — see [Privacy](#privacy) |
+| Unsigned disk image build | Working |
 | Signed release, notarization, Homebrew | Not available — Phase 5 |
 
 ## Screenshot
@@ -47,7 +50,25 @@ Do not rely on Clickit as your only copy of anything.
 
 ## Installation
 
-**There is no release yet.** Clickit is not on Homebrew, and there is no signed application to download. Building from source (below) is the only way to run it today. Distribution is roadmap Phase 5.
+There is no signed release and Clickit is **not on Homebrew**. You can either build from source, or package an unsigned disk image yourself:
+
+```bash
+./scripts/build-dmg.sh
+```
+
+That produces `dist/Clickit-<version>.dmg` with the usual drag-to-Applications layout.
+
+### Opening an unsigned build
+
+The disk image is **not signed with a Developer ID and not notarized**. It runs fine on the machine that built it, but on any other Mac macOS will refuse to open it, usually reporting that the app "is damaged and can't be opened". That message is misleading: it means unsigned, not corrupt.
+
+To open it anyway, the quarantine flag has to be removed after copying to Applications:
+
+```bash
+xattr -d com.apple.quarantine /Applications/Clickit.app
+```
+
+Only do this for a build you produced yourself or otherwise trust. Removing quarantine defeats a real safety check, and it is not something to ask users to do routinely. Signing and notarization are roadmap Phase 5, and are what would make this step unnecessary.
 
 ## Requirements
 
@@ -165,12 +186,19 @@ Inside the popover:
 | Key | Action |
 | --- | --- |
 | Up / Down | Move through history |
-| Return | Restore the selected item to the clipboard and close |
-| Escape | Clear the search, or close the popover if the search is empty |
+| Return | Restore the selected item and close |
+| Command-1 to 9 | Restore by position |
+| Escape | Clear the search, or close if the search is empty |
+| Command-F | Focus the search field |
+| Command-P | Pin or unpin the selected item |
 | Delete | Delete the selected item (when the search field is empty) |
 | Command-Delete | Delete the selected item (always) |
+| Command-K | Clear history, keeping pinned items |
+| Command-M | Pause or resume monitoring |
+| Command-Comma | Open Settings |
+| Command-Q | Quit Clickit |
 
-Then press **Command-V** wherever you want to paste.
+Then press **Command-V** wherever you want to paste. The full list is also in Settings under Shortcuts.
 
 > The global shortcut to open Clickit from anywhere (proposed default Option-V) is **not implemented yet**. Settings shows it as unavailable rather than pretending it works. See Phase 4.
 

@@ -51,6 +51,11 @@ playground.xcworkspace
 # Test output
 *.xcresult/
 
+# Packaged disk images. Built with scripts/build-dmg.sh and attached to
+# releases; never committed.
+dist/
+*.dmg
+
 # Local tooling
 .env
 *.log

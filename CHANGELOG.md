@@ -79,9 +79,14 @@ Initial implementation, covering roadmap Phases 1 and 2.
 
 - Up and Down to move through history, Return to restore and close, Escape to clear the search or close
 - Delete removes the selected item when the search field is empty; Command-Delete always removes it
+- Command-1 to Command-9 restore by position
+- Command-F focuses the search field, Command-P pins or unpins, Command-K clears history, Command-M pauses or resumes monitoring, Command-Comma opens Settings, Command-Q quits. Every footer button now has a key, so the popover can be driven without the mouse
+- A Shortcuts tab in Settings lists them all
 
 **Project**
 
+- Application icon
+- `scripts/build-dmg.sh` packages an unsigned disk image with the usual drag-to-Applications layout. The build is not signed or notarized, so README documents what a recipient has to do to open it and why that is not something to ask of users casually
 - Xcode project using file-system-synchronized groups, so source files join targets without `project.pbxproj` edits
 - Builds warning-free with `SWIFT_STRICT_CONCURRENCY = complete`
 - 105 unit tests covering hashing, duplicate detection, store ordering, image file lifecycle, all four retention rules, monitor behaviour, pasteboard classification against a real `NSPasteboard`, database durability, restart detection, and end-to-end capture and restore
@@ -96,5 +101,4 @@ Initial implementation, covering roadmap Phases 1 and 2.
 - **Excluded applications are partly implemented.** Attribution uses the frontmost application at the time of the copy, which is best-effort and not a security boundary. Roadmap Phase 4.
 - **Do-not-record markers depend on the source application** setting them; one that does not will have its copies recorded.
 - **Popover keyboard navigation has not been manually verified** across keyboard layouts.
-- **No application icon.** The asset catalog holds an empty `AppIcon` set.
-- **Not signed, not notarized, not distributed.** Roadmap Phase 5.
+- **Not signed and not notarized.** An unsigned disk image can be built with `scripts/build-dmg.sh`, but opening it on another Mac requires removing the quarantine flag by hand. Roadmap Phase 5.

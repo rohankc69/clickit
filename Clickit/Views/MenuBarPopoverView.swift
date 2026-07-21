@@ -46,7 +46,17 @@ struct MenuBarPopoverView: View {
         .onKeyPress(keys: [.delete, .deleteForward]) { press in
             deleteSelection(modifiers: press.modifiers)
         }
+        .onKeyPress(keys: Self.commandKeys) { press in
+            handleCommandKey(press)
+        }
     }
+
+    /// Every action reachable from a footer button also has a key, so the
+    /// popover can be driven without the mouse once it is open.
+    private static let commandKeys: Set<KeyEquivalent> = [
+        "p", "f", "k", "m", ",", "q",
+        "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    ]
 
     // MARK: - Sections
 
@@ -209,6 +219,47 @@ struct MenuBarPopoverView: View {
             searchQuery = ""
         }
         return .handled
+    }
+
+    /// Command-modified keys for the footer actions, plus Command-1 through
+    /// Command-9 to restore by position.
+    ///
+    /// Everything here requires Command, so ordinary typing in the search field
+    /// is never intercepted.
+    private func handleCommandKey(_ press: KeyPress) -> KeyPress.Result {
+        guard press.modifiers.contains(.command) else { return .ignored }
+
+        if let digit = press.characters.first, let position = Int(String(digit)), position >= 1 {
+            let items = visibleItems
+            guard position <= items.count else { return .ignored }
+            restore(items[position - 1])
+            return .handled
+        }
+
+        switch press.characters {
+        case "f":
+            isSearchFocused = true
+        case "p":
+            guard let item = selectedItem else { return .ignored }
+            environment.togglePin(item)
+        case "k":
+            environment.clearHistory()
+            selectedID = nil
+        case "m":
+            environment.toggleMonitoring()
+        case ",":
+            onOpenSettings()
+        case "q":
+            NSApp.terminate(nil)
+        default:
+            return .ignored
+        }
+        return .handled
+    }
+
+    private var selectedItem: ClipboardItem? {
+        guard let selectedID else { return nil }
+        return visibleItems.first { $0.id == selectedID }
     }
 
     /// A bare Delete is left to the search field while the user is typing,

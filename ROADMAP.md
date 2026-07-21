@@ -64,8 +64,10 @@ Phase 1 captures images already. Phase 3 makes them pleasant to work with.
 - [ ] More reliable source-application attribution
 - [ ] Keyboard navigation polish, including verified focus behaviour in the popover
 
-## Phase 5 — Distribution — Planned
+## Phase 5 — Distribution — In progress
 
+- [x] Application icon
+- [x] Unsigned disk image build via `scripts/build-dmg.sh`
 - [ ] Developer ID signing
 - [ ] Notarization and stapling
 - [ ] GitHub Releases with a signed archive
@@ -80,7 +82,6 @@ Not user-facing, but tracked:
 
 - [ ] Adopt Swift 6 language mode (the project already builds warning-free under `SWIFT_STRICT_CONCURRENCY = complete`)
 - [ ] Manual verification pass on popover keyboard navigation across keyboard layouts
-- [ ] Application icon (the asset catalog currently holds an empty `AppIcon` set)
 - [ ] Wire SwiftLint into CI once the rule set has settled
 
 ## Explicitly out of scope
