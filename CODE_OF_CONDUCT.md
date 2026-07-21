@@ -59,11 +59,14 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-**[MAINTAINER CONTACT: add an email address or reporting link before publishing
-this repository]**.
+reported to the maintainers at **clickitopensource@gmail.com**.
 
 All complaints will be reviewed and investigated promptly and fairly.
+
+Clickit is currently maintained by a single person, so a report goes directly
+to that maintainer. If your report concerns the maintainer, GitHub's
+[report abuse](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
+process is an independent route.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.

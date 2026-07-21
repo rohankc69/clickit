@@ -15,6 +15,8 @@ Clickit is in early development and has not had a tagged release. Only the curre
 
 Report it privately through GitHub's [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability): go to the repository's **Security** tab and choose **Report a vulnerability**. This creates a private advisory visible only to maintainers.
 
+If you would rather not use GitHub, email **clickitopensource@gmail.com** instead.
+
 Please include:
 
 - What the issue is and why it matters
