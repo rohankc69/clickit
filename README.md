@@ -31,7 +31,9 @@ Do not rely on Clickit as your only copy of anything.
 
 ## Screenshot
 
-> Placeholder — a screenshot of the menu-bar popover will be added here once the UI settles.
+<p align="center">
+  <img src="assets/screenshot-popover.png" alt="Clickit menu-bar popover showing recent clipboard history" width="320">
+</p>
 
 ## Core features
 
