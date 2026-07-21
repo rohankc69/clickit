@@ -167,7 +167,7 @@ final class ShortcutService: GlobalShortcutRegistering {
             unregister()
             throw GlobalShortcutError.registrationFailed(status: status)
         }
-        ClickitLog.shortcut.info(
+        ClickitLog.shortcut.notice(
             "Registered global shortcut \(configuration.displayString, privacy: .public)"
         )
     }

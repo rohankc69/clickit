@@ -13,6 +13,13 @@ Clickit has not had a tagged release yet. Everything below is unreleased.
 
 Initial implementation, covering roadmap Phases 1 and 2.
 
+**Diagnostics**
+
+- State that a bug report may turn on is logged at `notice`, which macOS keeps on disk, rather than `info`, which is discarded within minutes
+- Accessibility, pasting, recording and item count are logged at every launch, including when everything is healthy, so "working" can be told apart from "never checked"
+- Every automatic paste records its outcome and target application
+- Settings, General, Copy Diagnostics puts versions, permission state and counts on the clipboard for pasting into an issue. Never history contents
+
 **Pasting from anywhere**
 
 - Command-Shift-V opens Clickit at the text cursor in any application, registered as a system hotkey through Carbon

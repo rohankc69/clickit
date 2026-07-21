@@ -33,7 +33,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var contentSize: CGSize {
         switch self {
-        case .general: CGSize(width: 520, height: 400)
+        case .general: CGSize(width: 520, height: 470)
         case .shortcuts: CGSize(width: 520, height: 440)
         case .history: CGSize(width: 520, height: 460)
         case .privacy: CGSize(width: 520, height: 420)
@@ -55,6 +55,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
 private struct GeneralSettingsView: View {
     @Bindable var environment: AppEnvironment
+    @State private var didCopyDiagnostics = false
 
     var body: some View {
         Form {
@@ -97,6 +98,25 @@ private struct GeneralSettingsView: View {
                 Toggle("Open Clickit at login", isOn: .constant(false))
                     .disabled(true)
                 Caption("Not available yet.")
+            }
+
+            Section {
+                HStack {
+                    Button("Copy Diagnostics") {
+                        environment.copyDiagnosticsToClipboard()
+                        didCopyDiagnostics = true
+                    }
+                    if didCopyDiagnostics {
+                        Text("Copied")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .transition(.opacity)
+                    }
+                }
+            } header: {
+                Text("Support")
+            } footer: {
+                Caption("Versions and settings only. Never history contents.")
             }
         }
         .formStyle(.grouped)

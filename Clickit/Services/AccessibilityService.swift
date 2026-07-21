@@ -29,7 +29,7 @@ final class AccessibilityService: AccessibilityAuthorizing {
         // concurrency rejects. Its literal value is stable API.
         let promptKey = "AXTrustedCheckOptionPrompt"
         _ = AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
-        ClickitLog.shortcut.info("Requested Accessibility access")
+        ClickitLog.shortcut.notice("Requested Accessibility access")
     }
 
     /// Opens the exact settings pane, for the case where the one-time prompt has

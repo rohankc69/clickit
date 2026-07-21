@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow: settingsWindow
         )
         environment.start()
-        ClickitLog.app.info("Clickit launched")
+        ClickitLog.app.notice("Clickit launched")
     }
 
     func applicationWillTerminate(_ notification: Notification) {

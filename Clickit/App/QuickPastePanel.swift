@@ -202,8 +202,15 @@ final class QuickPasteController {
         }
 
         previousApplication.activate()
+        let target = previousApplication.bundleIdentifier ?? "unknown"
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-            self?.pasteSimulator.pasteIntoFrontmostApplication()
+            guard let self else { return }
+            let posted = pasteSimulator.pasteIntoFrontmostApplication()
+            // Logged either way. "Pasted into nothing" and "never tried" look
+            // identical from the outside, and only one of them is a bug here.
+            ClickitLog.shortcut.notice(
+                "Auto-paste into \(target, privacy: .public): \(posted ? "posted" : "not posted", privacy: .public)"
+            )
         }
     }
 }

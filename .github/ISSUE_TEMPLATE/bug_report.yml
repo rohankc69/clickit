@@ -56,14 +56,6 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: macos-version
-    attributes:
-      label: macOS version
-      placeholder: "14.6, 15.1, ..."
-    validations:
-      required: true
-
   - type: dropdown
     id: hardware
     attributes:
@@ -74,12 +66,14 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: commit
+  - type: textarea
+    id: diagnostics
     attributes:
-      label: Commit or branch you built
-      description: Clickit has no releases yet, so the commit hash is the version.
-      placeholder: "main @ abc1234"
+      label: Diagnostics
+      description: |
+        Clickit Settings, General, Copy Diagnostics, then paste here. This reports
+        versions, permission state and counts only, never history contents.
+      render: text
     validations:
       required: true
 
@@ -96,6 +90,14 @@ body:
       description: |
         Run this while reproducing the problem and paste the output. Clickit logs
         metadata only, never clipboard contents, so this is safe to share.
+
+        Already recorded, so run this after the fact:
+
+        ```
+        log show --last 1h --predicate 'subsystem == "com.clickit.Clickit"'
+        ```
+
+        To watch it happen live instead:
 
         ```
         log stream --info --predicate 'subsystem == "com.clickit.Clickit"'

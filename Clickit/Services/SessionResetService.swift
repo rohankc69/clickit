@@ -72,7 +72,7 @@ struct SessionResetService {
         guard removed > 0 else { return true }
 
         store.deleteAll(includingPinned: false)
-        ClickitLog.storage.info(
+        ClickitLog.storage.notice(
             "System restarted; cleared \(removed, privacy: .public) unpinned items"
         )
         return true

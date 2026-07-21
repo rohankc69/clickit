@@ -29,7 +29,7 @@ final class PasteSimulator: PasteSimulating {
     @discardableResult
     func pasteIntoFrontmostApplication() -> Bool {
         guard accessibility.isTrusted else {
-            ClickitLog.shortcut.info("Skipping auto-paste: Accessibility access not granted")
+            ClickitLog.shortcut.notice("Skipping auto-paste: Accessibility access not granted")
             return false
         }
 

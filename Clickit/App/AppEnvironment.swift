@@ -77,6 +77,67 @@ final class AppEnvironment {
         !isAccessibilityNoticeDismissed && accessibilityStatus != .satisfied
     }
 
+    /// One line describing the state a bug report is most likely to turn on.
+    ///
+    /// Logged unconditionally, including the healthy case. A message that only
+    /// appears when something is wrong cannot distinguish "working" from "the
+    /// check never ran", which is precisely the ambiguity that made an earlier
+    /// permission fault so slow to pin down.
+    func logDiagnosticState() {
+        let status: String = switch accessibilityStatus {
+        case .satisfied: isAccessibilityTrusted ? "granted" : "not needed"
+        case .notGranted: "not granted"
+        case .revoked: "no longer honoured, most likely after an update"
+        }
+        ClickitLog.app.notice(
+            """
+            State: accessibility \(status, privacy: .public); \
+            automatic pasting \(self.settingsStore.settings.autoPasteEnabled ? "on" : "off", privacy: .public); \
+            recording \(self.isMonitoringPaused ? "paused" : "on", privacy: .public); \
+            \(self.items.count, privacy: .public) items
+            """
+        )
+    }
+
+    /// Everything the maintainer needs to act on a report, and nothing that
+    /// could carry clipboard contents: counts and states only, never an item.
+    func diagnosticSummary() -> String {
+        let bundle = Bundle.main
+        let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        let accessibility: String = switch accessibilityStatus {
+        case .satisfied: isAccessibilityTrusted ? "granted" : "not required"
+        case .notGranted: "not granted"
+        case .revoked: "reset, most likely by an update"
+        }
+
+        return """
+        Clickit \(version) (\(build))
+        macOS \(ProcessInfo.processInfo.operatingSystemVersionString)
+
+        Accessibility: \(accessibility)
+        Automatic pasting: \(settingsStore.settings.autoPasteEnabled ? "on" : "off")
+        Shortcut: \(settingsStore.settings.openShortcut.displayString)\(shortcutError.map { " (failed: \($0))" } ?? "")
+        Recording: \(isMonitoringPaused ? "paused" : "on")
+        Poll interval: \(settingsStore.settings.pollInterval)s
+
+        Items: \(items.count) (\(items.filter(\.isPinned).count) pinned)
+        Storage: \(FileSizeFormatter.string(fromByteCount: clipboardStore.totalByteSize))
+        History on disk: \(clipboardStore is SQLiteClipboardStore ? "yes" : "no, running in memory")
+        Last error: \(lastErrorMessage ?? "none")
+        """
+    }
+
+    /// Puts the summary on the clipboard for pasting into an issue.
+    ///
+    /// Deliberately routed through the monitor's ignore list, so asking for
+    /// diagnostics does not itself become a history entry.
+    func copyDiagnosticsToClipboard() {
+        let changeCount = pasteboard.write(.text(diagnosticSummary()))
+        monitor.ignoreChange(count: changeCount)
+        ClickitLog.app.notice("Copied diagnostics to the clipboard")
+    }
+
     /// Surfaced in the popover rather than swallowed. Cleared on the next
     /// successful capture or when the user dismisses it.
     var lastErrorMessage: String?
@@ -160,7 +221,7 @@ final class AppEnvironment {
             let store = try SQLiteClipboardStore(imageStorage: imageStorage) { [weak relay] error in
                 relay?.handler?(error)
             }
-            ClickitLog.storage.info("Opened clipboard history database with \(store.items.count, privacy: .public) items")
+            ClickitLog.storage.notice("Opened clipboard history database with \(store.items.count, privacy: .public) items")
             return (store, nil)
         } catch {
             ClickitLog.storage.error(
@@ -198,9 +259,7 @@ final class AppEnvironment {
         // there is no point ageing out items that are about to be dropped.
         sessionReset.resetIfSystemRestarted(store: clipboardStore, settings: settingsStore.settings)
         refreshAccessibilityState()
-        if accessibilityStatus == .revoked {
-            ClickitLog.shortcut.info("Accessibility access is no longer honoured; automatic pasting is unavailable")
-        }
+        logDiagnosticState()
         runCleanup()
         if !settingsStore.settings.isMonitoringPaused {
             monitor.start()
