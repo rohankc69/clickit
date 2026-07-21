@@ -67,8 +67,6 @@ private struct GeneralSettingsView: View {
                     Text("Every second").tag(1.0)
                     Text("Every 2 seconds").tag(2.0)
                 }
-            } footer: {
-                Caption("macOS does not notify applications when the clipboard changes, so Clickit checks on this interval.")
             }
 
             Section {
@@ -84,8 +82,8 @@ private struct GeneralSettingsView: View {
                     // The stale entry still reads as enabled, so telling the
                     // user to remove it is the whole point of this message.
                     PermissionRow(
-                        message: "Access was reset, most likely by an update",
-                        detail: "Remove Clickit under Accessibility, add it again, then reopen Clickit.",
+                        message: "Access was reset by an update",
+                        detail: "Remove Clickit from the list, add it again, then reopen it.",
                         buttonTitle: "Open System Settings"
                     ) {
                         AccessibilityService.openSettingsPane()
@@ -93,8 +91,6 @@ private struct GeneralSettingsView: View {
                 }
             } header: {
                 Text("Pasting")
-            } footer: {
-                Caption("Used to find your text cursor and to press Command-V for you. Without it, items are placed on the clipboard and you paste them yourself.")
             }
 
             Section("Startup") {
@@ -192,8 +188,6 @@ private struct ShortcutsSettingsView: View {
                 Caption("Cannot be changed yet.")
             } header: {
                 Text("Anywhere")
-            } footer: {
-                Caption("Command-V is never taken and keeps working as it always has.")
             }
 
             Section("In Clickit") {
@@ -257,7 +251,7 @@ private struct HistorySettingsView: View {
             Section {
                 Toggle("Clear history when this Mac restarts", isOn: clearOnRestartBinding)
             } footer: {
-                Caption("Quitting and reopening Clickit clears nothing. Pinned items are always kept.")
+                Caption("Pinned items are kept.")
             }
 
             Section("Storage") {
@@ -328,12 +322,7 @@ private struct PrivacySettingsView: View {
     var body: some View {
         Form {
             Section {
-                Label {
-                    Text("Everything stays on this Mac. Clickit makes no network requests, has no accounts, and collects no telemetry.")
-                } icon: {
-                    Image(systemName: "lock.fill")
-                        .foregroundStyle(.green)
-                }
+                Text("Everything stays on this Mac. No network requests, no accounts, no telemetry.")
             }
 
             Section {
@@ -360,7 +349,7 @@ private struct PrivacySettingsView: View {
             } header: {
                 Text("Excluded applications")
             } footer: {
-                Caption("Copies are attributed to whichever application is frontmost at the time, which is a guess rather than the true source. Do not rely on this as a security boundary.")
+                Caption("Attribution is a best guess. Not a security boundary.")
             }
         }
         .formStyle(.grouped)

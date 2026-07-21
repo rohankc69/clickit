@@ -43,7 +43,7 @@ struct AccessibilityNoticeView: View {
 
     private var title: String {
         switch environment.accessibilityStatus {
-        case .revoked: "Pasting stopped working"
+        case .revoked: "Pasting stopped working after an update"
         case .notGranted, .satisfied: "Clickit can paste for you"
         }
     }
@@ -51,11 +51,11 @@ struct AccessibilityNoticeView: View {
     private var message: String {
         switch environment.accessibilityStatus {
         case .revoked:
-            // Naming the cause matters: the entry still looks enabled in System
-            // Settings, so the obvious fix of toggling it does nothing.
-            "This usually follows an update. Remove Clickit from Accessibility in System Settings, add it again, then reopen Clickit."
+            // The entry still looks enabled, so toggling it does nothing. Say
+            // to remove it, or the user follows a route that cannot work.
+            "Remove Clickit from Accessibility, add it again, then reopen it."
         case .notGranted, .satisfied:
-            "Grant Accessibility access and picked items paste straight into whatever you were typing in."
+            "Grant Accessibility access to paste picked items automatically."
         }
     }
 
