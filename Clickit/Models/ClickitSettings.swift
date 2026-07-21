@@ -30,6 +30,15 @@ struct ClickitSettings: Codable, Equatable, Sendable {
     /// still placed on the clipboard.
     var autoPasteEnabled: Bool
 
+    /// Whether Accessibility access has ever been held.
+    ///
+    /// Recorded so that losing it can be told apart from never having had it.
+    /// Until Clickit is signed with a stable identity, every update changes the
+    /// bundle's code signature, and macOS quietly stops honouring the existing
+    /// grant. Without this flag that failure is indistinguishable from a fresh
+    /// install, and the user gets no hint that an update caused it.
+    var hasHadAccessibilityAccess: Bool
+
     /// Discard unpinned history when the Mac restarts.
     ///
     /// On by default: history is a working set for the current session at the
@@ -54,6 +63,7 @@ struct ClickitSettings: Codable, Equatable, Sendable {
         flashOnCapture: true,
         openShortcut: .default,
         autoPasteEnabled: true,
+        hasHadAccessibilityAccess: false,
         clearHistoryOnRestart: true,
         excludedBundleIdentifiers: []
     )
@@ -96,6 +106,8 @@ extension ClickitSettings {
                 ?? fallback.openShortcut,
             autoPasteEnabled: try container.decodeIfPresent(Bool.self, forKey: .autoPasteEnabled)
                 ?? fallback.autoPasteEnabled,
+            hasHadAccessibilityAccess: try container.decodeIfPresent(Bool.self, forKey: .hasHadAccessibilityAccess)
+                ?? fallback.hasHadAccessibilityAccess,
             clearHistoryOnRestart: try container.decodeIfPresent(Bool.self, forKey: .clearHistoryOnRestart)
                 ?? fallback.clearHistoryOnRestart,
             excludedBundleIdentifiers: try container.decodeIfPresent([String].self, forKey: .excludedBundleIdentifiers)

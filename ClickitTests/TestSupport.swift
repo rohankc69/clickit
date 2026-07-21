@@ -33,6 +33,22 @@ final class MockPasteboardService: PasteboardServicing {
     }
 }
 
+/// Accessibility state under the test's control, since a test process cannot
+/// be granted or refused the real permission.
+@MainActor
+final class StubAccessibilityService: AccessibilityAuthorizing {
+    var isTrusted: Bool
+    private(set) var requestCount = 0
+
+    init(isTrusted: Bool = false) {
+        self.isTrusted = isTrusted
+    }
+
+    func requestAccess() {
+        requestCount += 1
+    }
+}
+
 /// Base class that provides a scratch image directory and isolated defaults.
 @MainActor
 class ClickitTestCase: XCTestCase {
@@ -97,14 +113,16 @@ class ClickitTestCase: XCTestCase {
 
     func makeEnvironment(
         settings: ClickitSettings = .default,
-        pasteboard: MockPasteboardService = MockPasteboardService()
+        pasteboard: MockPasteboardService = MockPasteboardService(),
+        accessibility: AccessibilityAuthorizing = StubAccessibilityService()
     ) -> AppEnvironment {
         AppEnvironment(
             settingsStore: makeSettingsStore(settings),
             imageStorage: imageStorage,
             clipboardStore: makeStore(),
             pasteboard: pasteboard,
-            shortcuts: ShortcutService()
+            shortcuts: ShortcutService(),
+            accessibility: accessibility
         )
     }
 

@@ -73,11 +73,23 @@ private struct GeneralSettingsView: View {
 
             Section {
                 Toggle("Paste automatically when I pick an item", isOn: autoPasteBinding)
-                if !environment.isAccessibilityTrusted {
+                switch environment.accessibilityStatus {
+                case .satisfied:
+                    EmptyView()
+                case .notGranted:
+                    PermissionRow(message: "Accessibility access is required") {
+                        environment.requestAccessibilityAccess()
+                    }
+                case .revoked:
+                    // The stale entry still reads as enabled, so telling the
+                    // user to remove it is the whole point of this message.
                     PermissionRow(
-                        message: "Accessibility access is required",
-                        grant: environment.requestAccessibilityAccess
-                    )
+                        message: "Access was reset, most likely by an update",
+                        detail: "Remove Clickit under Accessibility, add it again, then reopen Clickit.",
+                        buttonTitle: "Open System Settings"
+                    ) {
+                        AccessibilityService.openSettingsPane()
+                    }
                 }
             } header: {
                 Text("Pasting")
@@ -408,18 +420,25 @@ private struct KeyCombination: View {
 /// Shown when a feature is switched on but the permission behind it is missing.
 private struct PermissionRow: View {
     let message: String
-    let grant: () -> Void
+    var detail: String?
+    var buttonTitle = "Grant Access"
+    let action: () -> Void
 
     var body: some View {
-        HStack {
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .font(.callout)
-                .foregroundStyle(.orange)
-            Spacer()
-            Button("Grant Access", action: grant)
-            // The system prompt appears only once per application, so this is
-            // the way back for anyone who has already dismissed it.
-            Button("Open System Settings") { AccessibilityService.openSettingsPane() }
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 3) {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                if let detail {
+                    Text(detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 12)
+            Button(buttonTitle, action: action)
         }
     }
 }

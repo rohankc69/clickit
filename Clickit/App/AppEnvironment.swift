@@ -37,6 +37,46 @@ final class AppEnvironment {
         accessibility.requestAccess()
     }
 
+    /// Why automatic pasting is or is not working, in the terms the user needs
+    /// in order to fix it.
+    enum AccessibilityStatus: Equatable {
+        /// Either granted, or not needed because automatic pasting is off.
+        case satisfied
+        /// Wanted but never granted.
+        case notGranted
+        /// Granted once and no longer honoured. Practically always an update:
+        /// the new bundle has a different signature, so macOS stops matching the
+        /// existing grant. Re-toggling the old entry does not fix it -- it has to
+        /// be removed and added again.
+        case revoked
+    }
+
+    var accessibilityStatus: AccessibilityStatus {
+        guard settingsStore.settings.autoPasteEnabled else { return .satisfied }
+        if isAccessibilityTrusted { return .satisfied }
+        return settingsStore.settings.hasHadAccessibilityAccess ? .revoked : .notGranted
+    }
+
+    /// Latches the fact that access was held, so a later loss can be recognised.
+    ///
+    /// Called on launch and whenever the UI is about to report on the state, as
+    /// the user can change it in System Settings while Clickit is running.
+    func refreshAccessibilityState() {
+        guard isAccessibilityTrusted,
+              !settingsStore.settings.hasHadAccessibilityAccess
+        else { return }
+        settingsStore.settings.hasHadAccessibilityAccess = true
+    }
+
+    /// Dismissed for this launch only. A permission the user has chosen to
+    /// ignore should not keep interrupting them, but it also should not be
+    /// silently forgotten across launches while the feature stays broken.
+    var isAccessibilityNoticeDismissed = false
+
+    var shouldShowAccessibilityNotice: Bool {
+        !isAccessibilityNoticeDismissed && accessibilityStatus != .satisfied
+    }
+
     /// Surfaced in the popover rather than swallowed. Cleared on the next
     /// successful capture or when the user dismisses it.
     var lastErrorMessage: String?
@@ -157,6 +197,10 @@ final class AppEnvironment {
         // Before cleanup: a restart discards the whole unpinned working set, so
         // there is no point ageing out items that are about to be dropped.
         sessionReset.resetIfSystemRestarted(store: clipboardStore, settings: settingsStore.settings)
+        refreshAccessibilityState()
+        if accessibilityStatus == .revoked {
+            ClickitLog.shortcut.info("Accessibility access is no longer honoured; automatic pasting is unavailable")
+        }
         runCleanup()
         if !settingsStore.settings.isMonitoringPaused {
             monitor.start()
@@ -208,7 +252,10 @@ final class AppEnvironment {
     /// Accessibility access has not been granted. Saying so beats appearing to
     /// do nothing.
     func reportAutoPasteUnavailable() {
-        lastErrorMessage = "Copied. Press Command-V to paste — Clickit needs Accessibility access to paste for you."
+        // The banner already explains the permission and offers the fix, so
+        // this only has to cover what happened to the item just picked.
+        isAccessibilityNoticeDismissed = false
+        lastErrorMessage = "Copied. Press Command-V to paste it."
     }
 
     // MARK: - Capture

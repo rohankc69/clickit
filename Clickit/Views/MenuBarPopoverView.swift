@@ -27,6 +27,10 @@ struct MenuBarPopoverView: View {
         VStack(spacing: 0) {
             searchBar
             Divider()
+            if environment.shouldShowAccessibilityNotice {
+                AccessibilityNoticeView(environment: environment)
+                Divider()
+            }
             content
             if let message = environment.lastErrorMessage {
                 Divider()
@@ -39,6 +43,9 @@ struct MenuBarPopoverView: View {
         .onAppear {
             isSearchFocused = true
             selectedID = visibleItems.first?.id
+            // The user may have granted or withdrawn access in System Settings
+            // since this was last shown.
+            environment.refreshAccessibilityState()
         }
         .onChange(of: searchQuery) { _, _ in
             selectedID = visibleItems.first?.id
