@@ -1,22 +1,57 @@
 import SwiftUI
 
-struct SettingsView: View {
-    @Bindable var environment: AppEnvironment
+/// The panes of the Settings window, in toolbar order.
+///
+/// Each pane declares its own height so the window can resize to fit, the way
+/// System Settings and most Apple applications do, rather than padding every
+/// pane out to the tallest one.
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general
+    case shortcuts
+    case history
+    case privacy
 
-    var body: some View {
-        TabView {
-            GeneralSettingsView(environment: environment)
-                .tabItem { Label("General", systemImage: "gearshape") }
-            RetentionSettingsView(environment: environment)
-                .tabItem { Label("Retention", systemImage: "clock.arrow.circlepath") }
-            ShortcutsSettingsView(environment: environment)
-                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
-            PrivacySettingsView(environment: environment)
-                .tabItem { Label("Privacy", systemImage: "hand.raised") }
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .shortcuts: "Shortcuts"
+        case .history: "History"
+        case .privacy: "Privacy"
         }
-        .frame(width: 460, height: 380)
+    }
+
+    var symbolName: String {
+        switch self {
+        case .general: "gearshape"
+        case .shortcuts: "keyboard"
+        case .history: "clock"
+        case .privacy: "hand.raised"
+        }
+    }
+
+    var contentSize: CGSize {
+        switch self {
+        case .general: CGSize(width: 520, height: 400)
+        case .shortcuts: CGSize(width: 520, height: 440)
+        case .history: CGSize(width: 520, height: 460)
+        case .privacy: CGSize(width: 520, height: 420)
+        }
+    }
+
+    @MainActor @ViewBuilder
+    func view(environment: AppEnvironment) -> some View {
+        switch self {
+        case .general: GeneralSettingsView(environment: environment)
+        case .shortcuts: ShortcutsSettingsView(environment: environment)
+        case .history: HistorySettingsView(environment: environment)
+        case .privacy: PrivacySettingsView(environment: environment)
+        }
     }
 }
+
+// MARK: - General
 
 private struct GeneralSettingsView: View {
     @Bindable var environment: AppEnvironment
@@ -24,76 +59,48 @@ private struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Pause clipboard monitoring", isOn: pausedBinding)
-                Toggle("Confirm captures in the menu bar", isOn: flashBinding)
-                LabeledContent("Poll interval") {
-                    Picker("", selection: pollIntervalBinding) {
-                        Text("0.25s").tag(0.25)
-                        Text("0.5s").tag(0.5)
-                        Text("1s").tag(1.0)
-                        Text("2s").tag(2.0)
-                    }
-                    .labelsHidden()
-                    .frame(width: 90)
+                Toggle("Record items I copy", isOn: recordingBinding)
+                Toggle("Confirm each capture in the menu bar", isOn: flashBinding)
+                Picker("Check for changes", selection: pollIntervalBinding) {
+                    Text("Every 0.25 seconds").tag(0.25)
+                    Text("Every 0.5 seconds").tag(0.5)
+                    Text("Every second").tag(1.0)
+                    Text("Every 2 seconds").tag(2.0)
                 }
             } footer: {
-                Text("macOS does not notify apps when the clipboard changes, so Clickit checks a counter on this interval. When a capture is confirmed, the menu-bar icon briefly shows a checkmark.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent("Open Clickit") {
-                    Text(environment.settingsStore.settings.openShortcut.displayString)
-                        .monospaced()
-                        .foregroundStyle(.secondary)
-                }
-                if let shortcutError = environment.shortcutError {
-                    Label(shortcutError, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-                UnavailableNote("The shortcut works, but cannot be changed here yet. Recording a new one is still to come.")
-            } header: {
-                Text("Global shortcut")
-            } footer: {
-                Text("Opens Clickit from any application. Command-V keeps working exactly as it always has.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Caption("macOS does not notify applications when the clipboard changes, so Clickit checks on this interval.")
             }
 
             Section {
                 Toggle("Paste automatically when I pick an item", isOn: autoPasteBinding)
                 if !environment.isAccessibilityTrusted {
-                    HStack {
-                        Label("Accessibility access is needed", systemImage: "exclamationmark.triangle")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                        Spacer()
-                        Button("Grant Access") { environment.requestAccessibilityAccess() }
-                        Button("Open Settings") { AccessibilityService.openSettingsPane() }
-                    }
+                    PermissionRow(
+                        message: "Accessibility access is required",
+                        grant: environment.requestAccessibilityAccess
+                    )
                 }
             } header: {
                 Text("Pasting")
             } footer: {
-                Text("Without Accessibility access the item is still placed on the clipboard and you press Command-V yourself. Clickit needs the permission only to press it for you, and to find where your text cursor is.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Caption("Used to find your text cursor and to press Command-V for you. Without it, items are placed on the clipboard and you paste them yourself.")
             }
 
-            Section("Launch") {
-                UnavailableNote("Launch at login is not implemented yet. (Roadmap phase 4)")
+            Section("Startup") {
+                Toggle("Open Clickit at login", isOn: .constant(false))
+                    .disabled(true)
+                Caption("Not available yet.")
             }
         }
         .formStyle(.grouped)
     }
 
-    private var pausedBinding: Binding<Bool> {
+    /// Presented as recording rather than pausing, so the switch reads on for
+    /// the state the user wants.
+    private var recordingBinding: Binding<Bool> {
         Binding(
-            get: { environment.isMonitoringPaused },
+            get: { !environment.isMonitoringPaused },
             set: { newValue in
-                guard newValue != environment.isMonitoringPaused else { return }
+                guard newValue == environment.isMonitoringPaused else { return }
                 environment.toggleMonitoring()
             }
         )
@@ -104,8 +111,8 @@ private struct GeneralSettingsView: View {
             get: { environment.settingsStore.settings.autoPasteEnabled },
             set: { newValue in
                 environment.settingsStore.settings.autoPasteEnabled = newValue
-                // Asking for the permission at the moment the user opts in is
-                // the only point at which the prompt explains itself.
+                // Asking at the moment the user opts in is the only point at
+                // which the system prompt explains itself.
                 if newValue, !environment.isAccessibilityTrusted {
                     environment.requestAccessibilityAccess()
                 }
@@ -131,12 +138,79 @@ private struct GeneralSettingsView: View {
     }
 }
 
-private struct RetentionSettingsView: View {
+// MARK: - Shortcuts
+
+private struct ShortcutsSettingsView: View {
     @Bindable var environment: AppEnvironment
+
+    private struct Entry: Identifiable {
+        let id = UUID()
+        let keys: String
+        let action: String
+    }
+
+    private let navigation: [Entry] = [
+        Entry(keys: "Up, Down", action: "Move through history"),
+        Entry(keys: "Return", action: "Paste the selected item"),
+        Entry(keys: "Command-1 to 9", action: "Paste by position"),
+        Entry(keys: "Command-F", action: "Search"),
+        Entry(keys: "Escape", action: "Clear the search, or close"),
+    ]
+
+    private let actions: [Entry] = [
+        Entry(keys: "Command-P", action: "Pin or unpin"),
+        Entry(keys: "Delete", action: "Delete the selected item"),
+        Entry(keys: "Command-K", action: "Clear history, keeping pinned items"),
+        Entry(keys: "Command-M", action: "Pause or resume recording"),
+        Entry(keys: "Command-Comma", action: "Settings"),
+        Entry(keys: "Command-Q", action: "Quit"),
+    ]
 
     var body: some View {
         Form {
             Section {
+                LabeledContent("Open at the text cursor") {
+                    KeyCombination(environment.settingsStore.settings.openShortcut.displayString)
+                }
+                if let shortcutError = environment.shortcutError {
+                    Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+                Caption("Cannot be changed yet.")
+            } header: {
+                Text("Anywhere")
+            } footer: {
+                Caption("Command-V is never taken and keeps working as it always has.")
+            }
+
+            Section("In Clickit") {
+                ForEach(navigation, content: row)
+            }
+
+            Section {
+                ForEach(actions, content: row)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func row(_ entry: Entry) -> some View {
+        LabeledContent(entry.action) {
+            KeyCombination(entry.keys)
+        }
+    }
+}
+
+// MARK: - History
+
+private struct HistorySettingsView: View {
+    @Bindable var environment: AppEnvironment
+    @State private var isConfirmingClearAll = false
+
+    var body: some View {
+        Form {
+            Section("Limits") {
                 Stepper(
                     "Keep at most \(settings.maxItems) items",
                     value: binding(\.maxItems),
@@ -149,50 +223,56 @@ private struct RetentionSettingsView: View {
                     in: 50...5_000,
                     step: 50
                 )
-            } header: {
-                Text("Limits")
             }
 
             Section {
-                Toggle("Clear history when the Mac restarts", isOn: clearOnRestartBinding)
-            } footer: {
-                Text("Keeps history to the current session at this Mac. Pinned items are always kept. Quitting and relaunching Clickit does not clear anything.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Expiry") {
                 Stepper(
-                    "Text and links: \(settings.textRetentionDays) days",
+                    "Text and links after \(settings.textRetentionDays) days",
                     value: binding(\.textRetentionDays),
                     in: 1...365
                 )
                 Stepper(
-                    "Images and screenshots: \(settings.imageRetentionDays) days",
+                    "Images after \(settings.imageRetentionDays) days",
                     value: binding(\.imageRetentionDays),
                     in: 1...365
                 )
+            } header: {
+                Text("Expiry")
+            } footer: {
+                Caption("Pinned items never expire.")
             }
 
             Section {
-                LabeledContent("Current usage") {
+                Toggle("Clear history when this Mac restarts", isOn: clearOnRestartBinding)
+            } footer: {
+                Caption("Quitting and reopening Clickit clears nothing. Pinned items are always kept.")
+            }
+
+            Section("Storage") {
+                LabeledContent("Currently using") {
                     Text(FileSizeFormatter.string(fromByteCount: environment.clipboardStore.totalByteSize))
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Button("Run Cleanup Now") { environment.runCleanup() }
+                    Button("Clean Up Now") { environment.runCleanup() }
                     Spacer()
-                    Button("Clear All History", role: .destructive) {
-                        environment.clearHistory(includingPinned: true)
-                    }
+                    Button("Clear All History") { isConfirmingClearAll = true }
                 }
-            } footer: {
-                Text("Pinned items never expire and are never removed automatically.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "Clear all history, including pinned items?",
+            isPresented: $isConfirmingClearAll,
+            titleVisibility: .visible
+        ) {
+            Button("Clear All History", role: .destructive) {
+                environment.clearHistory(includingPinned: true)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This cannot be undone.")
+        }
     }
 
     private var settings: ClickitSettings {
@@ -227,6 +307,8 @@ private struct RetentionSettingsView: View {
     }
 }
 
+// MARK: - Privacy
+
 private struct PrivacySettingsView: View {
     @Bindable var environment: AppEnvironment
     @State private var newBundleIdentifier = ""
@@ -234,33 +316,50 @@ private struct PrivacySettingsView: View {
     var body: some View {
         Form {
             Section {
-                Text("Clickit stores everything on this Mac. It makes no network requests, has no accounts, and collects no telemetry.")
-                    .font(.callout)
+                Label {
+                    Text("Everything stays on this Mac. Clickit makes no network requests, has no accounts, and collects no telemetry.")
+                } icon: {
+                    Image(systemName: "lock.fill")
+                        .foregroundStyle(.green)
+                }
             }
 
-            Section("Excluded applications") {
-                ForEach(environment.settingsStore.settings.excludedBundleIdentifiers, id: \.self) { identifier in
-                    HStack {
-                        Text(identifier).monospaced()
-                        Spacer()
-                        Button("Remove") { remove(identifier) }
-                            .buttonStyle(.link)
+            Section {
+                if environment.settingsStore.settings.excludedBundleIdentifiers.isEmpty {
+                    Text("No applications excluded")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(environment.settingsStore.settings.excludedBundleIdentifiers, id: \.self) { identifier in
+                        HStack {
+                            Text(identifier)
+                                .monospaced()
+                            Spacer()
+                            Button("Remove") { remove(identifier) }
+                                .buttonStyle(.link)
+                        }
                     }
                 }
                 HStack {
-                    TextField("Bundle identifier, e.g. com.agilebits.onepassword7", text: $newBundleIdentifier)
+                    TextField("Bundle identifier", text: $newBundleIdentifier, prompt: Text("com.example.app"))
                         .textFieldStyle(.roundedBorder)
                     Button("Add", action: add)
-                        .disabled(newBundleIdentifier.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(trimmedIdentifier.isEmpty)
                 }
-                UnavailableNote("Partly implemented: exclusions are matched against the frontmost app at the time of the copy, which is a best-effort guess rather than the true source. There is no app picker yet. (Roadmap phase 4)")
+            } header: {
+                Text("Excluded applications")
+            } footer: {
+                Caption("Copies are attributed to whichever application is frontmost at the time, which is a guess rather than the true source. Do not rely on this as a security boundary.")
             }
         }
         .formStyle(.grouped)
     }
 
+    private var trimmedIdentifier: String {
+        newBundleIdentifier.trimmingCharacters(in: .whitespaces)
+    }
+
     private func add() {
-        let trimmed = newBundleIdentifier.trimmingCharacters(in: .whitespaces)
+        let trimmed = trimmedIdentifier
         guard !trimmed.isEmpty,
               !environment.settingsStore.settings.excludedBundleIdentifiers.contains(trimmed)
         else { return }
@@ -273,82 +372,11 @@ private struct PrivacySettingsView: View {
     }
 }
 
-/// Reference list of what Clickit responds to.
-///
-/// Read-only for now. Making these user-assignable belongs with the shortcut
-/// recorder in roadmap phase 4.
-private struct ShortcutsSettingsView: View {
-    /// Read live rather than from the defaults, so this tab cannot disagree with
-    /// the shortcut that is actually registered.
-    @Bindable var environment: AppEnvironment
+// MARK: - Shared pieces
 
-    private struct Entry: Identifiable {
-        let id = UUID()
-        let keys: String
-        let action: String
-    }
-
-    private let navigation: [Entry] = [
-        Entry(keys: "Up / Down", action: "Move through history"),
-        Entry(keys: "Return", action: "Restore the selected item and close"),
-        Entry(keys: "Command-1 to 9", action: "Restore by position"),
-        Entry(keys: "Escape", action: "Clear the search, or close"),
-        Entry(keys: "Command-F", action: "Focus the search field"),
-    ]
-
-    private let actions: [Entry] = [
-        Entry(keys: "Command-P", action: "Pin or unpin the selected item"),
-        Entry(keys: "Delete", action: "Delete the selected item"),
-        Entry(keys: "Command-Delete", action: "Delete while searching"),
-        Entry(keys: "Command-K", action: "Clear history, keeping pinned items"),
-        Entry(keys: "Command-M", action: "Pause or resume monitoring"),
-        Entry(keys: "Command-Comma", action: "Open Settings"),
-        Entry(keys: "Command-Q", action: "Quit Clickit"),
-    ]
-
-    var body: some View {
-        Form {
-            Section {
-                LabeledContent("Open Clickit at the text cursor") {
-                    Text(environment.settingsStore.settings.openShortcut.displayString)
-                        .monospaced()
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Anywhere")
-            } footer: {
-                Text("Works from any application. Command-V is never taken and keeps pasting as it always has.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Navigation") {
-                ForEach(navigation, content: row)
-            }
-            Section("Actions") {
-                ForEach(actions, content: row)
-            }
-            Section {
-                UnavailableNote("Everything below the first section works while Clickit is open, and cannot be reassigned yet. (Roadmap phase 4)")
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private func row(_ entry: Entry) -> some View {
-        LabeledContent {
-            Text(entry.keys)
-                .monospaced()
-                .foregroundStyle(.secondary)
-        } label: {
-            Text(entry.action)
-        }
-    }
-}
-
-/// Marks behaviour that is deliberately not wired up yet, so the UI never
-/// implies a feature works when it does not.
-private struct UnavailableNote: View {
+/// Explanatory text under a section. Kept to one short sentence: a settings
+/// pane that argues with the user reads as unfinished.
+private struct Caption: View {
     let text: String
 
     init(_ text: String) {
@@ -356,8 +384,42 @@ private struct UnavailableNote: View {
     }
 
     var body: some View {
-        Label(text, systemImage: "hammer")
-            .font(.caption)
+        Text(text)
+            .font(.callout)
             .foregroundStyle(.secondary)
+    }
+}
+
+/// A key combination, styled the way system UI presents one.
+private struct KeyCombination: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// Shown when a feature is switched on but the permission behind it is missing.
+private struct PermissionRow: View {
+    let message: String
+    let grant: () -> Void
+
+    var body: some View {
+        HStack {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.callout)
+                .foregroundStyle(.orange)
+            Spacer()
+            Button("Grant Access", action: grant)
+            // The system prompt appears only once per application, so this is
+            // the way back for anyone who has already dismissed it.
+            Button("Open System Settings") { AccessibilityService.openSettingsPane() }
+        }
     }
 }
