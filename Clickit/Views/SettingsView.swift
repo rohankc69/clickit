@@ -9,7 +9,7 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             RetentionSettingsView(environment: environment)
                 .tabItem { Label("Retention", systemImage: "clock.arrow.circlepath") }
-            ShortcutsSettingsView()
+            ShortcutsSettingsView(environment: environment)
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             PrivacySettingsView(environment: environment)
                 .tabItem { Label("Privacy", systemImage: "hand.raised") }
@@ -42,13 +42,44 @@ private struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Global shortcut") {
+            Section {
                 LabeledContent("Open Clickit") {
-                    Text(KeyboardShortcutConfiguration.default.displayString)
+                    Text(environment.settingsStore.settings.openShortcut.displayString)
                         .monospaced()
                         .foregroundStyle(.secondary)
                 }
-                UnavailableNote("Not implemented yet — the shortcut is proposed, not active. Use the menu-bar icon for now. (Roadmap phase 4)")
+                if let shortcutError = environment.shortcutError {
+                    Label(shortcutError, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                UnavailableNote("The shortcut works, but cannot be changed here yet. Recording a new one is still to come.")
+            } header: {
+                Text("Global shortcut")
+            } footer: {
+                Text("Opens Clickit from any application. Command-V keeps working exactly as it always has.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Paste automatically when I pick an item", isOn: autoPasteBinding)
+                if !environment.isAccessibilityTrusted {
+                    HStack {
+                        Label("Accessibility access is needed", systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Grant Access") { environment.requestAccessibilityAccess() }
+                        Button("Open Settings") { AccessibilityService.openSettingsPane() }
+                    }
+                }
+            } header: {
+                Text("Pasting")
+            } footer: {
+                Text("Without Accessibility access the item is still placed on the clipboard and you press Command-V yourself. Clickit needs the permission only to press it for you, and to find where your text cursor is.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Launch") {
@@ -64,6 +95,20 @@ private struct GeneralSettingsView: View {
             set: { newValue in
                 guard newValue != environment.isMonitoringPaused else { return }
                 environment.toggleMonitoring()
+            }
+        )
+    }
+
+    private var autoPasteBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settingsStore.settings.autoPasteEnabled },
+            set: { newValue in
+                environment.settingsStore.settings.autoPasteEnabled = newValue
+                // Asking for the permission at the moment the user opts in is
+                // the only point at which the prompt explains itself.
+                if newValue, !environment.isAccessibilityTrusted {
+                    environment.requestAccessibilityAccess()
+                }
             }
         )
     }
@@ -228,12 +273,15 @@ private struct PrivacySettingsView: View {
     }
 }
 
-/// Reference list of what the popover responds to.
+/// Reference list of what Clickit responds to.
 ///
-/// Read-only for now: these are fixed bindings inside Clickit's own window, not
-/// system-wide hotkeys. Making them user-assignable belongs with the global
-/// shortcut work in roadmap phase 4.
+/// Read-only for now. Making these user-assignable belongs with the shortcut
+/// recorder in roadmap phase 4.
 private struct ShortcutsSettingsView: View {
+    /// Read live rather than from the defaults, so this tab cannot disagree with
+    /// the shortcut that is actually registered.
+    @Bindable var environment: AppEnvironment
+
     private struct Entry: Identifiable {
         let id = UUID()
         let keys: String
@@ -260,6 +308,20 @@ private struct ShortcutsSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                LabeledContent("Open Clickit at the text cursor") {
+                    Text(environment.settingsStore.settings.openShortcut.displayString)
+                        .monospaced()
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Anywhere")
+            } footer: {
+                Text("Works from any application. Command-V is never taken and keeps pasting as it always has.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Navigation") {
                 ForEach(navigation, content: row)
             }
@@ -267,7 +329,7 @@ private struct ShortcutsSettingsView: View {
                 ForEach(actions, content: row)
             }
             Section {
-                UnavailableNote("These work while the popover is open. A system-wide shortcut to open Clickit from anywhere is not implemented yet. (Roadmap phase 4)")
+                UnavailableNote("Everything below the first section works while Clickit is open, and cannot be reassigned yet. (Roadmap phase 4)")
             }
         }
         .formStyle(.grouped)

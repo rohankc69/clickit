@@ -8,8 +8,15 @@ import SwiftUI
 struct ClipboardPreviewView: View {
     let item: ClipboardItem
     let environment: AppEnvironment
+    /// Set when the row is drawn on the accent fill, where the usual
+    /// translucent tile and secondary glyph would both disappear.
+    var isHighlighted = false
 
-    private let side: CGFloat = 28
+    private let side = ClickitDesign.thumbnailSide
+    private let shape = RoundedRectangle(
+        cornerRadius: ClickitDesign.thumbnailCornerRadius,
+        style: .continuous
+    )
 
     var body: some View {
         Group {
@@ -18,16 +25,29 @@ struct ClipboardPreviewView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                Image(systemName: item.type.systemImageName)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .frame(width: side, height: side)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                symbolTile
             }
         }
         .frame(width: side, height: side)
-        .clipShape(RoundedRectangle(cornerRadius: 5))
-        .accessibilityLabel(item.type.displayName)
+        .clipShape(shape)
+        // A hairline keeps a light screenshot from bleeding into a light row.
+        .overlay {
+            shape.strokeBorder(
+                isHighlighted ? AnyShapeStyle(.white.opacity(0.25)) : AnyShapeStyle(.separator),
+                lineWidth: 0.5
+            )
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var symbolTile: some View {
+        shape
+            .fill(isHighlighted ? AnyShapeStyle(.white.opacity(0.18)) : AnyShapeStyle(.quaternary))
+            .overlay {
+                Image(systemName: item.type.systemImageName)
+                    .font(.system(size: 14))
+                    .foregroundStyle(isHighlighted ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+            }
     }
 
     private var thumbnail: NSImage? {

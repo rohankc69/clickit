@@ -20,8 +20,19 @@ final class MenuBarController: NSObject {
     private var flashReset: DispatchWorkItem?
     private static let flashDuration: TimeInterval = 0.45
 
-    init(environment: AppEnvironment) {
+    /// Shown at the text caret when the global shortcut fires, as opposed to the
+    /// popover, which is anchored to the menu-bar icon.
+    private let quickPaste: QuickPasteController
+    private let settingsWindow: SettingsWindowController
+
+    init(
+        environment: AppEnvironment,
+        quickPaste: QuickPasteController,
+        settingsWindow: SettingsWindowController
+    ) {
         self.environment = environment
+        self.quickPaste = quickPaste
+        self.settingsWindow = settingsWindow
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
 
@@ -30,15 +41,21 @@ final class MenuBarController: NSObject {
         observeMonitoringState()
         observeCaptures()
 
+        // The shortcut opens the panel at the caret; clicking the menu-bar icon
+        // still opens the popover anchored to the icon.
         environment.openPopoverRequested = { [weak self] in
-            self?.showPopover()
+            self?.closePopover()
+            self?.quickPaste.toggle()
         }
     }
 
     private func configurePopover() {
         popover.behavior = .transient  // dismisses on any click outside
         popover.animates = false       // a utility popover should feel instant
-        popover.contentSize = NSSize(width: 360, height: 420)
+        popover.contentSize = NSSize(
+            width: ClickitDesign.surfaceSize.width,
+            height: ClickitDesign.surfaceSize.height
+        )
         popover.contentViewController = NSHostingController(
             rootView: MenuBarPopoverView(
                 environment: environment,
@@ -182,13 +199,7 @@ final class MenuBarController: NSObject {
 
     func openSettings() {
         closePopover()
-        NSApp.activate(ignoringOtherApps: true)
-        // The selector behind the standard Settings scene. It was renamed in
-        // macOS 13, so both spellings are attempted before giving up.
-        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil),
-           !NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil) {
-            ClickitLog.app.error("Could not open the Settings window")
-        }
+        settingsWindow.show()
     }
 
     @objc private func quit() {

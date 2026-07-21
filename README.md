@@ -116,7 +116,15 @@ When a change is detected, Clickit:
 6. Moves an existing duplicate to the top, or records a new entry.
 7. Runs the retention cleanup.
 
-**Clickit never simulates a paste keystroke.** Clicking an item puts it back on the system clipboard; you press Command-V yourself. This is deliberate — it means Clickit needs no Accessibility permission.
+## Pasting
+
+Press Command-Shift-V in any application and Clickit opens at your text cursor. Pick an item and it is pasted there.
+
+Command-V is never taken. Ordinary paste keeps working exactly as it always has, everywhere.
+
+Two parts of this need macOS Accessibility permission: finding the text cursor, and pressing Command-V on your behalf. Clickit asks for it when you first enable automatic pasting, and works without it in a reduced form — the panel opens at the pointer instead of the cursor, the item is placed on the clipboard, and you press Command-V yourself. Automatic pasting can be turned off in Settings, in which case the permission is never needed.
+
+Locating the cursor depends on the application reporting it. Native text fields do; some web views and cross-platform apps do not, and Clickit then falls back to the focused window, then the pointer.
 
 ## Local storage
 

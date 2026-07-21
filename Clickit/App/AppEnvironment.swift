@@ -26,6 +26,16 @@ final class AppEnvironment {
     @ObservationIgnored private let retention = RetentionService()
     @ObservationIgnored private let sessionReset: SessionResetService
     @ObservationIgnored private let shortcuts: GlobalShortcutRegistering
+    @ObservationIgnored private let accessibility: AccessibilityAuthorizing
+
+    /// Read fresh each time rather than cached: the user can grant or revoke it
+    /// in System Settings while Clickit is running, and a stale answer would
+    /// show the wrong state indefinitely.
+    var isAccessibilityTrusted: Bool { accessibility.isTrusted }
+
+    func requestAccessibilityAccess() {
+        accessibility.requestAccess()
+    }
 
     /// Surfaced in the popover rather than swallowed. Cleared on the next
     /// successful capture or when the user dismisses it.
@@ -52,12 +62,14 @@ final class AppEnvironment {
         clipboardStore: (any ClipboardStoring)? = nil,
         pasteboard: PasteboardServicing = PasteboardService(),
         shortcuts: GlobalShortcutRegistering = ShortcutService(),
-        sessionReset: SessionResetService = SessionResetService()
+        sessionReset: SessionResetService = SessionResetService(),
+        accessibility: AccessibilityAuthorizing = AccessibilityService()
     ) {
         self.settingsStore = settingsStore
         self.pasteboard = pasteboard
         self.shortcuts = shortcuts
         self.sessionReset = sessionReset
+        self.accessibility = accessibility
 
         let resolvedImageStorage = imageStorage ?? Self.makeImageStorage()
         self.imageStorage = resolvedImageStorage
@@ -149,7 +161,7 @@ final class AppEnvironment {
         if !settingsStore.settings.isMonitoringPaused {
             monitor.start()
         }
-        registerGlobalShortcutIfAvailable()
+        registerGlobalShortcut()
     }
 
     func stop() {
@@ -157,21 +169,47 @@ final class AppEnvironment {
         shortcuts.unregister()
     }
 
-    /// Global shortcuts are not implemented yet; the failure is expected and
-    /// only logged so the rest of startup continues normally.
-    private func registerGlobalShortcutIfAvailable() {
+    /// A shortcut already claimed by another application is a normal outcome,
+    /// not a crash: it is surfaced so the user can pick a different one, and
+    /// the rest of startup continues either way.
+    func registerGlobalShortcut() {
         guard shortcuts.isSupported else { return }
         do {
-            try shortcuts.register(.default) { [weak self] in
+            try shortcuts.register(settingsStore.settings.openShortcut) { [weak self] in
                 self?.openPopoverRequested?()
             }
+            shortcutError = nil
         } catch {
             ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
+            shortcutError = error.localizedDescription
         }
     }
 
-    /// Set by `MenuBarController`; invoked by the global shortcut once it exists.
+    /// Shown in Settings next to the shortcut rather than as a popover banner,
+    /// since that is where the user can act on it.
+    var shortcutError: String?
+
+    /// Applies a new binding, keeping the old one if registration fails so the
+    /// user is never left with no working shortcut.
+    func updateShortcut(_ configuration: KeyboardShortcutConfiguration) {
+        let previous = settingsStore.settings.openShortcut
+        settingsStore.settings.openShortcut = configuration
+        registerGlobalShortcut()
+        if shortcutError != nil {
+            settingsStore.settings.openShortcut = previous
+            registerGlobalShortcut()
+        }
+    }
+
+    /// Set by `MenuBarController`; invoked when the global shortcut fires.
     @ObservationIgnored var openPopoverRequested: (@MainActor () -> Void)?
+
+    /// The item is on the clipboard but Clickit could not paste it, because
+    /// Accessibility access has not been granted. Saying so beats appearing to
+    /// do nothing.
+    func reportAutoPasteUnavailable() {
+        lastErrorMessage = "Copied. Press Command-V to paste — Clickit needs Accessibility access to paste for you."
+    }
 
     // MARK: - Capture
 

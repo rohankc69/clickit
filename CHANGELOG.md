@@ -13,6 +13,21 @@ Clickit has not had a tagged release yet. Everything below is unreleased.
 
 Initial implementation, covering roadmap Phases 1 and 2.
 
+**Pasting from anywhere**
+
+- Command-Shift-V opens Clickit at the text cursor in any application, registered as a system hotkey through Carbon
+- Picking an item pastes it where you were typing. Command-V is never bound, so ordinary paste is untouched everywhere
+- The cursor position is read through Accessibility, degrading to the focused window and then the pointer when an application does not report it
+- Accessibility permission is requested only when automatic pasting is enabled, and declining it costs the cursor anchoring and the keystroke, nothing else
+- Settings is a window Clickit owns, rather than SwiftUI's `Settings` scene, which reports success without appearing in an accessory application
+
+**Interface**
+
+- Rows separate content from metadata, group into pinned and recent, and show their Command-number shortcut
+- Selection follows the window's active state rather than staying filled in a background window
+- The panel at the cursor draws its own vibrancy, corner radius and border, which a borderless window does not get for free
+- Surface measurements live in one place instead of being repeated in each AppKit host
+
 **Persistence (Phase 2)**
 
 - History is stored in SQLite at `~/Library/Application Support/Clickit/clickit.sqlite`, through the system `libsqlite3`, and survives quitting and relaunching

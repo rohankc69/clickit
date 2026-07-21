@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// Placeholder shown in place of the list.
+///
+/// Built on `ContentUnavailableView` so the layout, metrics and symbol
+/// treatment come from the system and stay correct as macOS restyles them.
 struct EmptyClipboardView: View {
     enum Reason {
         case noHistory
@@ -16,15 +20,15 @@ struct EmptyClipboardView: View {
 
         var title: String {
             switch self {
-            case .noHistory: "No clipboard history yet"
-            case .noSearchResults: "No matches"
-            case .monitoringPaused: "Monitoring paused"
+            case .noHistory: "No History Yet"
+            case .noSearchResults: "No Matches"
+            case .monitoringPaused: "Monitoring Paused"
             }
         }
 
         var message: String {
             switch self {
-            case .noHistory: "Copy something with ⌘C and it will show up here."
+            case .noHistory: "Copy something with Command-C and it will show up here."
             case .noSearchResults(let query): "Nothing in your history matches “\(query)”."
             case .monitoringPaused: "Clickit is not recording copies right now."
             }
@@ -34,18 +38,11 @@ struct EmptyClipboardView: View {
     let reason: Reason
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: reason.systemImage)
-                .font(.system(size: 24))
-                .foregroundStyle(.tertiary)
-            Text(reason.title)
-                .font(.system(size: 12, weight: .medium))
+        ContentUnavailableView {
+            Label(reason.title, systemImage: reason.systemImage)
+        } description: {
             Text(reason.message)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

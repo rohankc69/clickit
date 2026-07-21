@@ -22,6 +22,14 @@ struct ClickitSettings: Codable, Equatable, Sendable {
     /// clipboard, so without this a capture is invisible.
     var flashOnCapture: Bool
 
+    /// System-wide hotkey that opens Clickit wherever the user is typing.
+    var openShortcut: KeyboardShortcutConfiguration
+
+    /// Paste the chosen item automatically instead of leaving the user to press
+    /// Command-V. Requires Accessibility permission; without it the item is
+    /// still placed on the clipboard.
+    var autoPasteEnabled: Bool
+
     /// Discard unpinned history when the Mac restarts.
     ///
     /// On by default: history is a working set for the current session at the
@@ -44,6 +52,8 @@ struct ClickitSettings: Codable, Equatable, Sendable {
         pollInterval: 0.5,
         isMonitoringPaused: false,
         flashOnCapture: true,
+        openShortcut: .default,
+        autoPasteEnabled: true,
         clearHistoryOnRestart: true,
         excludedBundleIdentifiers: []
     )
@@ -82,6 +92,10 @@ extension ClickitSettings {
                 ?? fallback.isMonitoringPaused,
             flashOnCapture: try container.decodeIfPresent(Bool.self, forKey: .flashOnCapture)
                 ?? fallback.flashOnCapture,
+            openShortcut: try container.decodeIfPresent(KeyboardShortcutConfiguration.self, forKey: .openShortcut)
+                ?? fallback.openShortcut,
+            autoPasteEnabled: try container.decodeIfPresent(Bool.self, forKey: .autoPasteEnabled)
+                ?? fallback.autoPasteEnabled,
             clearHistoryOnRestart: try container.decodeIfPresent(Bool.self, forKey: .clearHistoryOnRestart)
                 ?? fallback.clearHistoryOnRestart,
             excludedBundleIdentifiers: try container.decodeIfPresent([String].self, forKey: .excludedBundleIdentifiers)
