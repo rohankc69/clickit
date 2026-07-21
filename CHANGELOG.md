@@ -5,6 +5,12 @@ All notable changes to Clickit are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-21
+
+### Added
+
+- Launch at login, through `SMAppService`. On by default; a single toggle in Settings, General turns it off. The default is applied once, so turning it off — here or in System Settings — is not overridden on the next launch
+
 ## [0.1.1] - 2026-07-21
 
 ### Fixed
@@ -126,7 +132,6 @@ Initial implementation, covering roadmap Phases 1 and 2.
 ### Known limitations
 
 - **The global shortcut is not implemented.** `ShortcutService` deliberately reports itself as unsupported and throws rather than silently doing nothing, and Settings shows the proposed Option-V binding as unavailable. Roadmap Phase 4.
-- **Launch at login is not implemented.** Roadmap Phase 4.
 - **Excluded applications are partly implemented.** Attribution uses the frontmost application at the time of the copy, which is best-effort and not a security boundary. Roadmap Phase 4.
 - **Do-not-record markers depend on the source application** setting them; one that does not will have its copies recorded.
 - **Popover keyboard navigation has not been manually verified** across keyboard layouts.
