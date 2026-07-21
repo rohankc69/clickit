@@ -1,0 +1,56 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Xcode build products
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# The shared scheme in Clickit.xcodeproj/xcshareddata is intentionally tracked;
+# per-user schemes are not.
+!Clickit.xcodeproj/xcshareddata/
+!Clickit.xcodeproj/xcshareddata/xcschemes/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods / Carthage — not used, listed so an accidental addition is noticed
+Pods/
+Carthage/Build/
+
+# Obj-C / Swift compiler
+*.o
+*.swiftmodule
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Test output
+*.xcresult/
+
+# Local tooling
+.env
+*.log

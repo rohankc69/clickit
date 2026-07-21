@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: macos-15
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Clickit.xcodeproj \
+            -scheme Clickit \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Clickit.xcodeproj \
+            -scheme Clickit \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 7
+
+  warnings:
+    name: Fail on warnings
+    runs-on: macos-15
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The project is warning-free under complete strict concurrency and is
+      # meant to stay that way, so warnings are escalated to errors here rather
+      # than in the checked-in build settings, where they would make local
+      # experimentation painful.
+      - name: Build with warnings as errors
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Clickit.xcodeproj \
+            -scheme Clickit \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            GCC_TREAT_WARNINGS_AS_ERRORS=YES

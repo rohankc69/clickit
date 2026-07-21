@@ -1,0 +1,86 @@
+name: Feature request
+description: Suggest an improvement to Clickit
+title: "[Feature]: "
+labels: ["enhancement", "needs triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Clickit is deliberately small and local-first. The most useful requests
+        are ones that make the core loop better, not ones that broaden what the
+        app is.
+
+        Please check [ROADMAP.md](../blob/main/ROADMAP.md) first. It lists what is
+        already planned, and an "Explicitly out of scope" section covering
+        settled decisions: cloud sync, accounts, telemetry, AI features,
+        collaboration, and automatic paste simulation. Requests for those will be
+        closed with a pointer to that section.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before requesting
+      options:
+        - label: I read the ROADMAP, and this is not already planned or explicitly out of scope
+          required: true
+        - label: I searched existing issues
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve
+      description: Describe the situation you run into, not the solution you have in mind.
+      placeholder: "When I copy several snippets in a row, I..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like Clickit to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including working around it, or whether an existing feature nearly covers it.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this touch
+      options:
+        - Menu bar and popover
+        - Search and navigation
+        - Clipboard capture and classification
+        - Storage and retention
+        - Privacy controls
+        - Keyboard and shortcuts
+        - Settings
+        - Build, tests, or tooling
+        - Something else
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Clickit's commitments. Confirm the request is compatible with them.
+      options:
+        - label: This does not require network access, an account, or cloud storage
+          required: true
+        - label: This does not require collecting telemetry or analytics
+          required: true
+        - label: This does not require a third-party dependency, or I have explained below why one is unavoidable
+          required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Prior art in other clipboard managers, mockups, or willingness to implement it yourself.
