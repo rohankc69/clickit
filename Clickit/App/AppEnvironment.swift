@@ -31,6 +31,13 @@ final class AppEnvironment {
     /// successful capture or when the user dismisses it.
     var lastErrorMessage: String?
 
+    /// Incremented every time something is recorded. Observers use it purely as
+    /// a signal; the value itself carries no meaning beyond "it changed".
+    ///
+    /// A counter rather than a callback so that any number of observers can
+    /// react, and so tests can assert on it without installing a spy.
+    private(set) var captureCount = 0
+
     var isMonitoringPaused: Bool {
         settingsStore.settings.isMonitoringPaused
     }
@@ -191,6 +198,7 @@ final class AppEnvironment {
                 """
             )
             lastErrorMessage = nil
+            captureCount += 1
             runCleanup(now: captured.capturedAt)
         } catch {
             ClickitLog.clipboard.error("Failed to capture clipboard content: \(error.localizedDescription, privacy: .public)")

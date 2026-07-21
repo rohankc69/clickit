@@ -17,6 +17,11 @@ struct ClickitSettings: Codable, Equatable, Sendable {
 
     var isMonitoringPaused: Bool
 
+    /// Briefly show a confirmation mark in the menu bar when something is
+    /// recorded. macOS gives no feedback of its own when content reaches the
+    /// clipboard, so without this a capture is invisible.
+    var flashOnCapture: Bool
+
     /// Discard unpinned history when the Mac restarts.
     ///
     /// On by default: history is a working set for the current session at the
@@ -38,6 +43,7 @@ struct ClickitSettings: Codable, Equatable, Sendable {
         imageRetentionDays: 7,
         pollInterval: 0.5,
         isMonitoringPaused: false,
+        flashOnCapture: true,
         clearHistoryOnRestart: true,
         excludedBundleIdentifiers: []
     )
@@ -74,6 +80,8 @@ extension ClickitSettings {
                 ?? fallback.pollInterval,
             isMonitoringPaused: try container.decodeIfPresent(Bool.self, forKey: .isMonitoringPaused)
                 ?? fallback.isMonitoringPaused,
+            flashOnCapture: try container.decodeIfPresent(Bool.self, forKey: .flashOnCapture)
+                ?? fallback.flashOnCapture,
             clearHistoryOnRestart: try container.decodeIfPresent(Bool.self, forKey: .clearHistoryOnRestart)
                 ?? fallback.clearHistoryOnRestart,
             excludedBundleIdentifiers: try container.decodeIfPresent([String].self, forKey: .excludedBundleIdentifiers)

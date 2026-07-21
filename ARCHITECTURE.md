@@ -58,6 +58,14 @@ This is the only place Clickit reaches for AppKit beyond `NSPasteboard`. The pop
 
 The status-item icon reflects monitoring state: `list.clipboard` when active, `pause.circle` when paused. `MenuBarController` keeps it in sync with a `withObservationTracking` loop that re-arms itself, since that API fires only once per registration.
 
+### Capture confirmation
+
+The icon swaps to a checkmark for 450 ms whenever `AppEnvironment.captureCount` changes. macOS gives no feedback of its own when content reaches the clipboard, least of all a screenshot, so this is the only signal that Clickit recorded anything.
+
+The icon is **swapped rather than animated**. Menu-bar items sit beside system indicators, where movement reads as something being wrong; a static mark confirms without competing for attention.
+
+`captureCount` is an observable counter rather than a callback, so any number of observers can react and tests can assert on it without installing a spy. It ticks for duplicate captures too, because from the user's side a copy still happened and silence would look like a failure. Each flash cancels the previous pending restore, so a burst of copies ends on the correct icon instead of leaving a checkmark stranded.
+
 ## Clipboard observation flow
 
 ```
@@ -291,7 +299,7 @@ The project rule is that errors are neither force-unwrapped away nor silently sw
 
 ## Testing strategy
 
-101 unit tests, run with `xcodebuild test`.
+105 unit tests, run with `xcodebuild test`.
 
 The system boundary is the protocol seam. `PasteboardServicing` is mocked (`MockPasteboardService`), so capture, deduplication, self-write suppression and exclusion rules are all exercised deterministically without a window server. `ImageStoring` is *not* mocked — tests use the real service pointed at a scratch directory, so file creation and deletion behaviour is genuinely verified.
 

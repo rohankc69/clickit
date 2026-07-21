@@ -143,6 +143,53 @@ final class AppEnvironmentTests: ClickitTestCase {
         XCTAssertFalse(environment.monitor.isRunning)
     }
 
+    // MARK: - Capture signal
+
+    /// `captureCount` is what drives the menu-bar confirmation. It must tick for
+    /// anything recorded, and stay put for anything ignored.
+    func testCaptureCountIncrementsForEachRecordedItem() {
+        XCTAssertEqual(environment.captureCount, 0)
+
+        pasteboard.stage(.text("one"))
+        environment.monitor.poll()
+        XCTAssertEqual(environment.captureCount, 1)
+
+        pasteboard.stage(.text("two"))
+        environment.monitor.poll()
+        XCTAssertEqual(environment.captureCount, 2)
+    }
+
+    /// A repeated copy is still a capture from the user's point of view, so it
+    /// should confirm rather than look like nothing happened.
+    func testCaptureCountIncrementsForDuplicates() {
+        pasteboard.stage(.text("repeated"))
+        environment.monitor.poll()
+        pasteboard.stage(.text("other"))
+        environment.monitor.poll()
+        pasteboard.stage(.text("repeated"))
+        environment.monitor.poll()
+
+        XCTAssertEqual(environment.captureCount, 3)
+        XCTAssertEqual(environment.items.count, 2)
+    }
+
+    func testCaptureCountDoesNotMoveForIgnoredContent() {
+        pasteboard.stageUnsupportedContent()
+        environment.monitor.poll()
+
+        XCTAssertEqual(environment.captureCount, 0)
+    }
+
+    func testRestoringDoesNotCountAsACapture() {
+        pasteboard.stage(.text("only entry"))
+        environment.monitor.poll()
+
+        environment.restore(environment.items[0])
+        environment.monitor.poll()
+
+        XCTAssertEqual(environment.captureCount, 1)
+    }
+
     // MARK: - Cleanup on capture
 
     func testCleanupRunsAfterEveryCapture() {

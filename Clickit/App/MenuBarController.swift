@@ -15,6 +15,11 @@ final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
 
+    /// Pending restore of the normal icon after a capture flash. Held so a
+    /// rapid burst of copies does not leave the confirmation stuck on screen.
+    private var flashReset: DispatchWorkItem?
+    private static let flashDuration: TimeInterval = 0.45
+
     init(environment: AppEnvironment) {
         self.environment = environment
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -23,6 +28,7 @@ final class MenuBarController: NSObject {
         configurePopover()
         configureStatusItem()
         observeMonitoringState()
+        observeCaptures()
 
         environment.openPopoverRequested = { [weak self] in
             self?.showPopover()
@@ -75,6 +81,46 @@ final class MenuBarController: NSObject {
                 self.observeMonitoringState()
             }
         }
+    }
+
+    private func observeCaptures() {
+        withObservationTracking {
+            _ = environment.captureCount
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.flashCapture()
+                self.observeCaptures()
+            }
+        }
+    }
+
+    /// Briefly swaps the icon for a confirmation mark.
+    ///
+    /// macOS gives no feedback when something reaches the clipboard, least of
+    /// all a screenshot, so this is the only signal that Clickit recorded it.
+    /// The icon is swapped rather than animated: menu-bar items sit next to
+    /// system indicators, and movement there reads as something being wrong.
+    private func flashCapture() {
+        guard environment.settingsStore.settings.flashOnCapture,
+              let button = statusItem.button
+        else { return }
+
+        // Showing a confirmation over a paused icon would contradict itself.
+        guard !environment.isMonitoringPaused else { return }
+
+        flashReset?.cancel()
+        button.image = NSImage(
+            systemSymbolName: "checkmark.circle.fill",
+            accessibilityDescription: "Clickit captured an item"
+        )
+        button.image?.isTemplate = true
+
+        let reset = DispatchWorkItem { [weak self] in
+            self?.updateStatusIcon()
+        }
+        flashReset = reset
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.flashDuration, execute: reset)
     }
 
     // MARK: - Interaction

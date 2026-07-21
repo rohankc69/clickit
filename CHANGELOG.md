@@ -33,6 +33,7 @@ Initial implementation, covering roadmap Phases 1 and 2.
 **Application shell**
 
 - Menu-bar application built on `NSStatusItem` and `NSPopover`, with no Dock icon (`LSUIElement`)
+- The menu-bar icon briefly shows a checkmark when an item is recorded. macOS gives no feedback when content reaches the clipboard, so without it a capture is invisible. Switchable in Settings, and suppressed while monitoring is paused
 - Menu-bar icon reflects whether monitoring is active or paused
 - Compact popover with search, history list, and footer actions; dismisses on click-outside, with animation disabled so it opens instantly
 - Right-click menu on the menu-bar icon for pause, settings and quit
@@ -83,7 +84,7 @@ Initial implementation, covering roadmap Phases 1 and 2.
 
 - Xcode project using file-system-synchronized groups, so source files join targets without `project.pbxproj` edits
 - Builds warning-free with `SWIFT_STRICT_CONCURRENCY = complete`
-- 101 unit tests covering hashing, duplicate detection, store ordering, image file lifecycle, all four retention rules, monitor behaviour, pasteboard classification against a real `NSPasteboard`, database durability, restart detection, and end-to-end capture and restore
+- 105 unit tests covering hashing, duplicate detection, store ordering, image file lifecycle, all four retention rules, monitor behaviour, pasteboard classification against a real `NSPasteboard`, database durability, restart detection, and end-to-end capture and restore
 - A shared `ClipboardStoreContractTests` suite that both the SQLite and in-memory stores inherit, so the two implementations cannot diverge
 - GitHub Actions workflow building and testing on macOS
 - Documentation: README, ARCHITECTURE, ROADMAP, PRIVACY, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT

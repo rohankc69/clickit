@@ -39,6 +39,7 @@ Do not rely on Clickit as your only copy of anything.
 - **Pin** items you want to keep, **delete** the ones you do not.
 - **Duplicate-aware.** Copying the same thing twice moves the existing entry to the top instead of piling up.
 - **Pause monitoring** at any time; the menu-bar icon shows which mode you are in.
+- **Capture confirmation.** The menu-bar icon briefly shows a checkmark when something is recorded, so you know it landed.
 - **Automatic cleanup** with configurable size, count and age limits.
 - **Persistent across app restarts.** History is kept in a local SQLite database, so quitting Clickit or having it crash loses nothing.
 - **Cleared when the Mac restarts.** History is a working set for the current session, not an archive. Pinned items are always kept. This is a setting, so you can turn it off.
@@ -143,6 +144,19 @@ Clipboard history is sensitive by nature — it accumulates passwords, tokens, p
 **Excluded applications are only partly implemented.** You can add bundle identifiers in Settings, and copies from those apps are dropped. However, attribution uses the frontmost application at the moment of the copy, which is a best-effort guess rather than a guarantee of which process wrote to the pasteboard. Do not treat it as a security boundary yet. A proper app picker and more reliable attribution are Phase 4.
 
 See [PRIVACY.md](PRIVACY.md) for the full statement.
+
+## Screenshots
+
+macOS saves screenshots to a file by default, which never touches the clipboard, so Clickit does not see them. To send one to the clipboard instead, use the built-in system shortcuts:
+
+| Shortcut | Result |
+| --- | --- |
+| `Command-Shift-3` / `Command-Shift-4` | Saves a file. Clickit does not see it. |
+| `Command-Control-Shift-3` / `Command-Control-Shift-4` | Copies to the clipboard. Clickit records it. |
+
+If the four-key chord is awkward, rebind it: **System Settings, Keyboard, Keyboard Shortcuts, Screenshots**, then change "Copy picture of selected area to the clipboard" to whatever you prefer. Avoid combinations that applications already use, such as `Command-Shift-S`, because a system shortcut overrides application shortcuts everywhere.
+
+Clickit deliberately does not capture the screen itself. Doing so would require Screen Recording permission and would duplicate what macOS already does well.
 
 ## Keyboard shortcuts
 

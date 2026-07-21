@@ -23,6 +23,7 @@ private struct GeneralSettingsView: View {
         Form {
             Section {
                 Toggle("Pause clipboard monitoring", isOn: pausedBinding)
+                Toggle("Confirm captures in the menu bar", isOn: flashBinding)
                 LabeledContent("Poll interval") {
                     Picker("", selection: pollIntervalBinding) {
                         Text("0.25s").tag(0.25)
@@ -34,7 +35,7 @@ private struct GeneralSettingsView: View {
                     .frame(width: 90)
                 }
             } footer: {
-                Text("macOS does not notify apps when the clipboard changes, so Clickit checks a counter on this interval.")
+                Text("macOS does not notify apps when the clipboard changes, so Clickit checks a counter on this interval. When a capture is confirmed, the menu-bar icon briefly shows a checkmark.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -62,6 +63,13 @@ private struct GeneralSettingsView: View {
                 guard newValue != environment.isMonitoringPaused else { return }
                 environment.toggleMonitoring()
             }
+        )
+    }
+
+    private var flashBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settingsStore.settings.flashOnCapture },
+            set: { environment.settingsStore.settings.flashOnCapture = $0 }
         )
     }
 
