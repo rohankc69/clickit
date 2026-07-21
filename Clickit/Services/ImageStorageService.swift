@@ -29,6 +29,11 @@ protocol ImageStoring: Sendable {
     func delete(relativePath: String) throws
     func byteSize(relativePath: String) -> Int
     func url(forRelativePath relativePath: String) -> URL
+
+    /// Every file currently held. Used to find images left behind by records
+    /// that no longer exist. Exposed here rather than having callers read the
+    /// directory themselves, so the storage location stays owned by one type.
+    func storedFilenames() throws -> [String]
 }
 
 struct ImageStorageService: ImageStoring {
@@ -36,14 +41,7 @@ struct ImageStorageService: ImageStoring {
 
     /// `~/Library/Application Support/Clickit/Images`
     static func defaultDirectory() throws -> URL {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        return base.appendingPathComponent("Clickit", isDirectory: true)
-            .appendingPathComponent("Images", isDirectory: true)
+        try ClickitDirectories.images()
     }
 
     init(directory: URL) {
@@ -101,5 +99,10 @@ struct ImageStorageService: ImageStoring {
 
     func url(forRelativePath relativePath: String) -> URL {
         directory.appendingPathComponent(relativePath)
+    }
+
+    func storedFilenames() throws -> [String] {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(atPath: directory.path)
     }
 }

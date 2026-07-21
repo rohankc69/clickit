@@ -28,18 +28,19 @@ Delivered beyond the original scope, because the protocol seams made it cheap an
 - [x] nspasteboard.org do-not-record conventions honoured, so password managers can opt out
 - [x] 63 unit tests
 
-## Phase 2 — Persistence — Planned
+## Phase 2 — Persistence — Done
 
-The one thing standing between Clickit and daily use: history currently dies with the process.
+History survives quitting.
 
-- [ ] Disk-backed `ClipboardStoring` implementation (SQLite over `libsqlite3`; see ARCHITECTURE.md for why not SwiftData)
-- [ ] Schema and migration strategy
-- [ ] Load history at launch
-- [ ] Reconcile orphaned image files against records on startup
-- [ ] Store-level tests reusing the existing protocol test suite
+- [x] Disk-backed `ClipboardStoring` implementation (SQLite over the system `libsqlite3`; see ARCHITECTURE.md for why not SwiftData)
+- [x] Schema and migration strategy keyed off `PRAGMA user_version`, WAL mode
+- [x] Load history at launch as a write-through cache
+- [x] Reconcile orphaned image files against records on startup
+- [x] Shared contract test suite, so both stores are held to identical behaviour
+- [x] Graceful fallback to in-memory history if the database cannot be opened
 - [ ] Benchmark search and retention at 1,000+ items
 
-Phase 2 requires no changes to views, retention rules, or the monitor. That is the point of the protocol.
+Phase 2 required no changes to views, retention rules, or the monitor. That was the point of the protocol.
 
 ## Phase 3 — Images — Planned
 
@@ -56,6 +57,7 @@ Phase 1 captures images already. Phase 3 makes them pleasant to work with.
 - [ ] Configurable global shortcut, implemented with `RegisterEventHotKey` (proposed default Option-V)
 - [ ] Shortcut recorder UI in Settings, with conflict detection
 - [ ] Layout-aware key naming via `UCKeyTranslate`
+- [ ] Auto-paste after selecting an item, so Command-V is not needed. Decided on 2026-07-21 to ship this **enabled by default**, matching Raycast and Paste. It requires Accessibility permission, which is a real trust cost for a clipboard manager, so the first-run prompt must explain precisely why it is needed and the feature must degrade to clipboard-only when permission is refused. PRIVACY.md and the README both need updating when this lands, since they currently state that Clickit requests no permissions.
 - [ ] Launch at login (`SMAppService`)
 - [ ] Excluded-applications picker instead of typed bundle identifiers
 - [ ] More reliable source-application attribution
@@ -88,4 +90,4 @@ These are not "later" items. They are decisions.
 - Telemetry, analytics, crash reporting
 - AI features, content analysis, OCR of clipboard contents
 - Collaboration or sharing
-- Automatic paste simulation, which would require Accessibility permission and make Clickit able to type into other applications
+- Automatic paste simulation was originally out of scope for this reason. It was reconsidered on 2026-07-21 and moved into Phase 4 as an enabled-by-default feature; see that phase for the conditions attached.

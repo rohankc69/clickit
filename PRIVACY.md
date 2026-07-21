@@ -47,10 +47,13 @@ Everything is on your Mac, under:
 
 ```
 ~/Library/Application Support/Clickit/
+├── clickit.sqlite   History: text, links, and metadata
 └── Images/          PNG files for copied images and screenshots
 ```
 
-Text and metadata are currently held in memory only and are lost when Clickit quits. When disk persistence lands (roadmap Phase 2) the database will live in the same directory, and nowhere else.
+Text and metadata are stored in a local SQLite database. It is an ordinary file on your disk, readable only by your user account. It is never uploaded, never synced, and never leaves the machine.
+
+Because history now persists across restarts, what you copy is retained until the retention rules remove it: 30 days for text and links, 7 days for images, or sooner if the 1,000-item or 500 MB limits are reached. Pinned items are kept indefinitely. Clear History removes records and their image files immediately.
 
 Settings are stored in the standard macOS preferences domain, `com.clickit.Clickit`.
 
@@ -83,7 +86,7 @@ Please read these. They are the difference between what Clickit does today and w
 
 **Do-not-record markers only work if the source application sets them.** Clickit honours the `org.nspasteboard` conventions described above, but a password manager that does not mark its writes will have its copies recorded like anything else. When in doubt, pause monitoring before handling credentials.
 
-**History is not encrypted at rest.** Image files are plain PNGs readable by anything running as your user. macOS FileVault protects them at the disk level; Clickit adds no further encryption.
+**History is not encrypted at rest.** The database and image files are readable by anything running as your user. macOS FileVault protects them at the disk level; Clickit adds no further encryption. This matters more now that history persists across restarts than it did when it lived only in memory.
 
 **No sandbox.** Clickit is not sandboxed, because it writes to the conventional `~/Library/Application Support/` location. It requests no special permissions — notably, it does **not** request Accessibility permission, because it never simulates keystrokes.
 

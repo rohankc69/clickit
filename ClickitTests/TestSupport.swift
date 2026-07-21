@@ -59,6 +59,13 @@ class ClickitTestCase: XCTestCase {
         if FileManager.default.fileExists(atPath: imageDirectory.path) {
             try FileManager.default.removeItem(at: imageDirectory)
         }
+        // SQLite leaves -wal and -shm sidecars beside the database file.
+        for suffix in ["", "-wal", "-shm"] {
+            let sidecar = URL(fileURLWithPath: databaseURL.path + suffix)
+            if FileManager.default.fileExists(atPath: sidecar.path) {
+                try FileManager.default.removeItem(at: sidecar)
+            }
+        }
         defaults.removePersistentDomain(forName: suiteName)
         try await super.tearDown()
     }
@@ -71,6 +78,21 @@ class ClickitTestCase: XCTestCase {
 
     func makeStore() -> InMemoryClipboardStore {
         InMemoryClipboardStore(imageStorage: imageStorage)
+    }
+
+    /// A database file inside this test's scratch directory. Calling
+    /// `makeSQLiteStore()` more than once reopens the *same* file, which is how
+    /// the durability tests simulate quitting and relaunching.
+    var databaseURL: URL {
+        imageDirectory.deletingLastPathComponent()
+            .appendingPathComponent("\(imageDirectory.lastPathComponent).sqlite")
+    }
+
+    func makeSQLiteStore() throws -> SQLiteClipboardStore {
+        try SQLiteClipboardStore(
+            database: SQLiteDatabase(url: databaseURL),
+            imageStorage: imageStorage
+        )
     }
 
     func makeEnvironment(

@@ -8,7 +8,7 @@ Clickit is a lightweight, open-source clipboard-history utility for macOS. It li
 
 **Early development. Not production-ready.**
 
-Clickit is at the end of roadmap **Phase 1**. The core loop works — copy, find, restore, paste — but the app is not signed, not notarized, not distributed, and **history is held in memory only, so it is lost when you quit**. Disk persistence is Phase 2.
+Clickit is at the end of roadmap **Phase 2**. The core loop works — copy, find, restore, paste — and history now survives quitting. The app is not signed, not notarized, and not distributed, so building from source is the only way to run it.
 
 Do not rely on Clickit as your only copy of anything.
 
@@ -17,9 +17,9 @@ Do not rely on Clickit as your only copy of anything.
 | Menu-bar app, popover UI | Working |
 | Text / URL / image capture | Working |
 | Duplicate detection, search, pin, delete | Working |
-| Retention and cleanup rules | Working (over in-memory history) |
+| Retention and cleanup rules | Working |
 | Image files on disk | Working |
-| History survives quit | Not yet — Phase 2 |
+| History survives quit | Working |
 | Global shortcut | Not implemented — Phase 4 |
 | Launch at login | Not implemented — Phase 4 |
 | Excluded applications | Partial — see [Privacy](#privacy) |
@@ -39,6 +39,7 @@ Do not rely on Clickit as your only copy of anything.
 - **Duplicate-aware.** Copying the same thing twice moves the existing entry to the top instead of piling up.
 - **Pause monitoring** at any time; the menu-bar icon shows which mode you are in.
 - **Automatic cleanup** with configurable size, count and age limits.
+- **Persistent.** History is kept in a local SQLite database and survives quitting and restarting.
 - **Local only.** No network requests, no accounts, no telemetry, no AI.
 
 ## Installation
@@ -99,10 +100,13 @@ Everything lives on your Mac, under:
 
 ```
 ~/Library/Application Support/Clickit/
+├── clickit.sqlite   # history: text, links, and metadata
 └── Images/          # PNG files for copied images and screenshots
 ```
 
-Text and metadata are held in memory for now (Phase 2 adds a local database in the same directory). Image bytes are always kept as files on disk, with only the filename recorded alongside the entry, so browsing history never pages megabytes of screenshots into memory.
+Text and metadata live in a local SQLite database. Image bytes are kept as separate files on disk, with only the filename recorded on the entry, so browsing history never pages megabytes of screenshots into memory.
+
+The database is read into memory once at launch and kept as a write-through cache, so search stays instant while every change is committed to disk immediately. Nothing is written anywhere else on your system.
 
 ### Retention defaults
 
@@ -150,7 +154,7 @@ Then press **Command-V** wherever you want to paste.
 
 ## Roadmap
 
-Phase 1 (menu-bar app, monitoring, restore, popover) is complete. Phase 2 adds disk persistence, Phase 3 richer image support, Phase 4 the global shortcut and launch-at-login, Phase 5 a signed and notarized release.
+Phases 1 and 2 are complete: the menu-bar app, clipboard monitoring, restore, the popover, and local persistence. Phase 3 adds richer image support, Phase 4 the global shortcut and launch-at-login, Phase 5 a signed and notarized release.
 
 Full detail in [ROADMAP.md](ROADMAP.md).
 

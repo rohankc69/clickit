@@ -50,14 +50,64 @@ final class AppEnvironment {
         self.shortcuts = shortcuts
 
         let resolvedImageStorage = imageStorage ?? Self.makeImageStorage()
-        self.clipboardStore = clipboardStore ?? InMemoryClipboardStore(imageStorage: resolvedImageStorage)
         self.imageStorage = resolvedImageStorage
+
+        // The store is built before `self` exists, so write failures are routed
+        // through a relay that is pointed at `self` once initialisation is done.
+        let relay = ErrorRelay()
+        self.errorRelay = relay
+
+        if let clipboardStore {
+            self.clipboardStore = clipboardStore
+            self.storeStartupError = nil
+        } else {
+            let (store, failure) = Self.makeClipboardStore(imageStorage: resolvedImageStorage, relay: relay)
+            self.clipboardStore = store
+            self.storeStartupError = failure
+        }
 
         self.monitor = ClipboardMonitor(
             pasteboard: pasteboard,
             settingsProvider: { [settingsStore] in settingsStore.settings }
         ) { [weak self] captured in
             self?.handle(captured)
+        }
+
+        relay.handler = { [weak self] error in
+            self?.lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Forwards store write failures to `AppEnvironment` once it exists.
+    private final class ErrorRelay {
+        var handler: ((Error) -> Void)?
+    }
+
+    @ObservationIgnored private let errorRelay: ErrorRelay
+    /// Set when the database could not be opened and history fell back to
+    /// memory. Surfaced on `start()`, once the UI can show it.
+    @ObservationIgnored private let storeStartupError: String?
+
+    /// Falls back to in-memory history if the database cannot be opened, so a
+    /// corrupt or unwritable file costs persistence rather than the whole app.
+    private static func makeClipboardStore(
+        imageStorage: ImageStoring,
+        relay: ErrorRelay
+    ) -> (any ClipboardStoring, String?) {
+        do {
+            let store = try SQLiteClipboardStore(imageStorage: imageStorage) { [weak relay] error in
+                relay?.handler?(error)
+            }
+            ClickitLog.storage.info("Opened clipboard history database with \(store.items.count, privacy: .public) items")
+            return (store, nil)
+        } catch {
+            ClickitLog.storage.error(
+                "Could not open the history database, continuing in memory: \(error.localizedDescription, privacy: .public)"
+            )
+            return (
+                InMemoryClipboardStore(imageStorage: imageStorage),
+                "History could not be saved to disk and will be lost when Clickit quits. \(error.localizedDescription)"
+            )
         }
     }
 
@@ -79,6 +129,9 @@ final class AppEnvironment {
     // MARK: - Lifecycle
 
     func start() {
+        if let storeStartupError {
+            lastErrorMessage = storeStartupError
+        }
         runCleanup()
         if !settingsStore.settings.isMonitoringPaused {
             monitor.start()

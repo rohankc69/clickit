@@ -16,6 +16,7 @@ Clickit/
 ├── App/          Composition root, AppKit menu-bar shell
 ├── Models/       Value types: ClipboardItem, ClipboardItemType, ClickitSettings
 ├── Services/     Pasteboard, storage, monitoring, retention, shortcuts
+│   └── Persistence/  SQLite wrapper and the disk-backed store
 ├── Views/        SwiftUI popover and settings
 ├── Utilities/    Hashing, formatting, logging
 └── Resources/    Assets.xcassets
@@ -127,13 +128,13 @@ URLs are resolved before image data because a file copied in Finder carries a fi
 | `isPinned` | Exempt from all automatic deletion |
 | `byteSize` | UTF-8 length for text, file size for images |
 
-Keeping the model free of any storage framework is what allows the current in-memory store to be swapped for a disk-backed one without touching a single view.
+Keeping the model free of any storage framework is what allowed the disk-backed store to be added in Phase 2 without touching a single view, retention rule, or existing test.
 
 `ClipboardItemType.rawValue` is folded into hashes and will be persisted, so existing cases must keep their spelling once a release ships.
 
 ## Persistence strategy
 
-**Current state: in-memory only.** `InMemoryClipboardStore` holds an array; history is lost on quit. This matches roadmap Phase 1 and is stated prominently in the README rather than papered over.
+History is stored in SQLite at `~/Library/Application Support/Clickit/clickit.sqlite`, through the system `libsqlite3` — which ships with macOS and is therefore not a third-party dependency.
 
 All access goes through the `ClipboardStoring` protocol:
 
@@ -152,15 +153,42 @@ protocol ClipboardStoring: AnyObject {
 }
 ```
 
-**Phase 2 will add a disk-backed implementation behind this same protocol.** Every retention rule, every view, and every test above this line stays unchanged.
+Two implementations exist:
 
-The intended choice is SQLite through a thin hand-rolled wrapper over `libsqlite3` rather than SwiftData, because:
+- **`SQLiteClipboardStore`** is what ships. It persists to disk.
+- **`InMemoryClipboardStore`** is the fallback used when the database cannot be opened, and the simplest subject for tests.
 
-- the retention rules are naturally set-based (order by `lastUsedAt`, sum `byteSize`, filter on `isPinned`) and read better as SQL than as fetch descriptors,
-- SwiftData's `@Model` macro requires the model to be a managed class, which is exactly the coupling the protocol above exists to avoid,
-- it keeps the macOS 14.0 floor comfortable.
+Both are held to the same standard by `ClipboardStoreContractTests`, an abstract suite that each concrete store inherits, so they cannot quietly diverge.
 
-This decision is not yet implemented and can still be revisited.
+### Why SQLite rather than SwiftData
+
+- The retention rules are naturally set-based (order by `lastUsedAt`, sum `byteSize`, filter on `isPinned`) and read better as SQL than as fetch descriptors.
+- SwiftData's `@Model` macro requires the model to be a managed class, which is exactly the coupling `ClipboardStoring` exists to avoid. `ClipboardItem` stays a plain `struct`.
+- It keeps the macOS 14.0 floor comfortable, with no framework-version caveats.
+
+### Write-through cache
+
+`items` is an in-memory array loaded from the database at launch. Every mutation updates the array **and** the database together; if the write fails, the cache is left untouched, so memory never claims something the database does not hold.
+
+This is what keeps search, retention and the views synchronous — `items` is still a plain array, exactly as it was before persistence landed. The cache is affordable because history is bounded (1,000 items by default) and image bytes are never in it, only filenames.
+
+Writes cannot throw through `ClipboardStoring`, so `SQLiteClipboardStore` takes an `onError` closure. `AppEnvironment` routes it to `lastErrorMessage`, which surfaces as a banner in the popover. A failed write is never dropped silently.
+
+### Schema and migrations
+
+One table, `items`, plus two indexes: a unique index on `content_hash` and a descending index on `last_used_at`. The unique index means duplicate prevention is enforced by the schema, not only by the capture path, so a bug upstream cannot corrupt the history.
+
+Migrations are keyed off `PRAGMA user_version` and run in order. Adding a version means appending a case, never editing an existing one. The database opens in WAL mode, which survives an unclean shutdown far better than the rollback journal — and Clickit is usually killed rather than quit.
+
+A row that fails to decode is skipped rather than aborting the load, so one bad record never costs the user their history.
+
+### Startup reconciliation
+
+Image files with no surviving record are deleted when the store opens. These accumulate when a delete is interrupted between removing the row and unlinking the file. The store asks `ImageStoring` for the filenames it holds rather than reading the directory itself, so the storage location stays owned by one type — and tests cannot be pointed at the real user directory by accident.
+
+### Fallback
+
+If the database cannot be opened at all, `AppEnvironment` falls back to `InMemoryClipboardStore` and surfaces an explicit warning that history will not be saved. A corrupt or unwritable file costs persistence, not the whole application.
 
 ### Ordering
 
@@ -227,6 +255,8 @@ Clickit is a small, UI-driven application. Almost everything is `@MainActor`-iso
 
 The exception is `ImageStoring`, which is `Sendable` and does plain file I/O, so it can be moved off the main actor when image volumes justify it.
 
+`SQLiteDatabase` is deliberately not thread-safe. It is owned by a `@MainActor` store, so every call already arrives on the main actor, and adding locking would guard against a caller that does not exist.
+
 The project builds with `SWIFT_STRICT_CONCURRENCY = complete` and **no warnings**. Swift 6 language mode is a tracked follow-up, not a blocker.
 
 `ClipboardMonitor` has no `deinit` cleanup by design: the run loop owns the timer, and invalidating it from a `deinit` that may run off the main actor would be a data race. Owners call `stop()` explicitly.
@@ -242,7 +272,7 @@ The project rule is that errors are neither force-unwrapped away nor silently sw
 
 ## Testing strategy
 
-63 unit tests, run with `xcodebuild test`.
+90 unit tests, run with `xcodebuild test`.
 
 The system boundary is the protocol seam. `PasteboardServicing` is mocked (`MockPasteboardService`), so capture, deduplication, self-write suppression and exclusion rules are all exercised deterministically without a window server. `ImageStoring` is *not* mocked — tests use the real service pointed at a scratch directory, so file creation and deletion behaviour is genuinely verified.
 
@@ -257,7 +287,8 @@ Coverage by area:
 | File | Covers |
 | --- | --- |
 | `ContentHasherTests` | Fingerprint stability, type separation, case and whitespace sensitivity |
-| `ClipboardStoreTests` | Ordering, duplicate promotion, pinning, image-file deletion, byte accounting |
+| `ClipboardStoreContractTests` | Ordering, duplicate promotion, pinning, image-file deletion, byte accounting. Abstract; inherited by both store suites so they cannot diverge |
+| `SQLiteClipboardStoreTests` | Everything above, plus durability across reopen, field round-trips, schema version, orphan reconciliation, unique-hash enforcement |
 | `RetentionServiceTests` | Per-type expiry, count limit, size limit, pinned preservation, idempotence |
 | `ClipboardMonitorTests` | Change detection, self-write suppression, exclusions, pause baseline |
 | `PasteboardServiceTests` | Real-pasteboard classification, TIFF normalisation, do-not-record markers, write round-trips |

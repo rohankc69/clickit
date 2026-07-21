@@ -11,7 +11,17 @@ Clickit has not had a tagged release yet. Everything below is unreleased.
 
 ### Added
 
-Initial implementation, covering roadmap Phase 1.
+Initial implementation, covering roadmap Phases 1 and 2.
+
+**Persistence (Phase 2)**
+
+- History is stored in SQLite at `~/Library/Application Support/Clickit/clickit.sqlite`, through the system `libsqlite3`, and survives quitting and relaunching
+- Loaded at launch as a write-through cache, so search and retention stay synchronous while every change is committed immediately
+- Schema migrations keyed off `PRAGMA user_version`; WAL journalling, which survives an unclean shutdown
+- A unique index on `content_hash` enforces duplicate prevention at the schema level, not only in the capture path
+- Image files with no surviving record are removed when the store opens
+- Falls back to in-memory history with an explicit warning if the database cannot be opened, so a corrupt file costs persistence rather than the whole app
+- Write failures surface in the popover instead of being dropped
 
 **Application shell**
 
@@ -45,6 +55,7 @@ Initial implementation, covering roadmap Phase 1.
 
 **Storage**
 
+- History and metadata in a local SQLite database; see the persistence section above
 - Images written as PNG files to `~/Library/Application Support/Clickit/Images/`, with only the filename kept on the record
 - Deleting an image record deletes its file
 - A captured image that turns out to be a duplicate has its freshly written file discarded
@@ -65,13 +76,13 @@ Initial implementation, covering roadmap Phase 1.
 
 - Xcode project using file-system-synchronized groups, so source files join targets without `project.pbxproj` edits
 - Builds warning-free with `SWIFT_STRICT_CONCURRENCY = complete`
-- 63 unit tests covering hashing, duplicate detection, store ordering, image file lifecycle, all four retention rules, monitor behaviour, pasteboard classification against a real `NSPasteboard`, and end-to-end capture and restore
+- 90 unit tests covering hashing, duplicate detection, store ordering, image file lifecycle, all four retention rules, monitor behaviour, pasteboard classification against a real `NSPasteboard`, database durability, and end-to-end capture and restore
+- A shared `ClipboardStoreContractTests` suite that both the SQLite and in-memory stores inherit, so the two implementations cannot diverge
 - GitHub Actions workflow building and testing on macOS
 - Documentation: README, ARCHITECTURE, ROADMAP, PRIVACY, SECURITY, CONTRIBUTING, CODE_OF_CONDUCT
 
 ### Known limitations
 
-- **History is in memory only and is lost when Clickit quits.** Disk persistence is roadmap Phase 2.
 - **The global shortcut is not implemented.** `ShortcutService` deliberately reports itself as unsupported and throws rather than silently doing nothing, and Settings shows the proposed Option-V binding as unavailable. Roadmap Phase 4.
 - **Launch at login is not implemented.** Roadmap Phase 4.
 - **Excluded applications are partly implemented.** Attribution uses the frontmost application at the time of the copy, which is best-effort and not a security boundary. Roadmap Phase 4.
