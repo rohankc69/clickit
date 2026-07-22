@@ -1,10 +1,10 @@
 # Architecture
 
-This document describes how Clickit is put together and, more importantly, why. Read it before making structural changes.
+Describes how Clickit is put together, and why. Read it before making structural changes.
 
 ## Guiding constraints
 
-1. **The system clipboard must keep behaving normally.** Clickit is an additive observer. It never intercepts Command-C, never simulates Command-V, and never installs an event tap.
+1. **The system clipboard must keep behaving normally.** Clickit is, first, an additive observer: it never intercepts Command-C and never installs an event tap. The one exception is opt-in automatic paste, which synthesizes a Command-V keystroke into the frontmost app — behind Accessibility permission, and without ever binding Command-V itself.
 2. **Nothing leaves the machine.** No network stack is linked, no endpoint is called.
 3. **SwiftUI views hold no persistence or system logic.** Everything system-facing sits behind a protocol so it can be replaced in tests.
 4. **No third-party dependencies.** Apple frameworks only.
@@ -46,7 +46,7 @@ ClickitApp (@main, SwiftUI App)
 
 ### Why AppKit for the menu bar
 
-SwiftUI's `MenuBarExtra` covers the click-to-open case, and it was the first choice. It was rejected because on macOS 14 it **cannot be opened programmatically** — there is no `isPresented` binding. The roadmap requires a configurable global shortcut that opens the *same* popover, which `MenuBarExtra` cannot support without replacing the whole shell later.
+SwiftUI's `MenuBarExtra` covers the click-to-open case, and it was the first choice. It was rejected because on macOS 14 it **cannot be opened programmatically** — there is no `isPresented` binding. Clickit needs a global shortcut that opens the *same* popover (now shipped), which `MenuBarExtra` cannot support without replacing the whole shell later.
 
 `NSStatusItem` plus `NSPopover` hosting an `NSHostingController` keeps that door open, and additionally gives:
 
@@ -212,6 +212,8 @@ Image bytes never live in the item record. `ImageStorageService` writes PNGs to:
 
 and the record keeps only the filename. This keeps history listing and searching cheap regardless of how many screenshots are stored.
 
+The list never decodes those PNGs at full size. `ThumbnailService` produces a small ImageIO-downsampled image (`kCGImageSourceThumbnailMaxPixelSize`), decoded on a background task and cached by item id, so browsing a wall of screenshots costs kilobytes rather than the tens of megabytes a full decode would — a full-screen Retina shot is a few hundred KB on disk but ~30 MB decoded. The full image is read only when an item is actually pasted.
+
 The service is behind `ImageStoring`, so tests use a real implementation pointed at a scratch directory — file creation and deletion are genuinely exercised rather than mocked.
 
 Clickit is **not sandboxed**, which is what allows the conventional Application Support path. If the directory cannot be created, `AppEnvironment` falls back to a temporary directory and logs the failure rather than refusing to launch.
@@ -251,7 +253,7 @@ These are the backstop for machines that go a long time between restarts; in nor
 Rules run in order:
 
 1. **Expired unpinned items.** Per-type windows: 30 days for text and links, 7 days for images. Measured from `lastUsedAt`, so re-using an old entry resets its clock.
-2. **Oldest unpinned items over the count limit.** Pinned entries count toward the total but are never the ones removed, so a user who pins more than `maxItems` keeps all of them and simply stops accumulating new history.
+2. **Oldest unpinned items over the count limit.** Pinned entries count toward the total but are never the ones removed, so a user who pins more than `maxItems` keeps all of them and stops accumulating new history.
 3. **Oldest unpinned images over the size limit.** Only images are evicted here. Images are what consume the disk budget, and dropping text to satisfy a byte limit would lose far more history than it reclaims. If only text remains the pass stops rather than looping.
 4. **Pinned items are never removed automatically**, by any rule.
 
@@ -261,11 +263,21 @@ Cleanup runs at launch, after every capture, and whenever retention settings cha
 
 ## Shortcut handling
 
-**Not implemented.** `ShortcutService` exists, conforms to `GlobalShortcutRegistering`, reports `isSupported == false`, and throws from `register`. It deliberately does not register anything: a stub that silently succeeded would be indistinguishable from a broken hotkey. Settings displays the proposed binding with an explicit "not implemented yet" note.
+`ShortcutService` conforms to `GlobalShortcutRegistering`, reports `isSupported == true`, and registers a system-wide hotkey through Carbon's `RegisterEventHotKey` — the only public API for a global hotkey that does **not** require Accessibility permission. `AppEnvironment` registers the binding on launch, and a failure to claim it (another app already holds the combination) is surfaced in Settings rather than treated as fatal.
 
-The binding itself is already a value type, `KeyboardShortcutConfiguration`, stored as a virtual key code plus modifier flags rather than a character, so it will survive keyboard-layout changes. The proposed default is Option-V, defined in exactly one place so Settings can replace it.
+The binding is a value type, `KeyboardShortcutConfiguration`, stored as a virtual key code plus modifier flags rather than a character, so it survives keyboard-layout changes. The default is Command-Shift-V, defined in exactly one place. It is not yet reassignable: Settings shows it read-only until the recorder UI lands (roadmap Phase 4).
 
-The intended implementation is Carbon's `RegisterEventHotKey`, still the only public API for a global hotkey that does **not** require Accessibility permission. `AppEnvironment.openPopoverRequested` is already wired to `MenuBarController.showPopover`, so the handler has somewhere to land.
+The handler fires `AppEnvironment.openPopoverRequested`, wired to `MenuBarController.showPopover`, so a shortcut press opens the same popover as a click on the menu-bar icon.
+
+## Automatic paste
+
+Opt-in, on by default. After the user picks an item, `PasteSimulator` synthesizes Command-V into the frontmost app with a `CGEvent`, so the item lands where they were typing. This is the only part of Clickit that acts on another application rather than observing it.
+
+It needs Accessibility permission for two things, both behind protocols so the paths are testable without a trusted process: `CaretLocator` reads the focused element's caret so the panel can open there, and `PasteSimulator` posts the keystroke. `AccessibilityService` gates the permission. It is requested the first time automatic pasting is enabled; declined or turned off, the feature degrades to clipboard-only — the panel opens at the pointer and the user presses Command-V themselves. Nothing is ever read from other windows beyond the one caret attribute, and only at the moment the shortcut fires.
+
+## Launch at login
+
+`LoginItemService` wraps `SMAppService.mainApp`, behind `LoginItemManaging` for testing. It is on by default: `AppEnvironment` registers Clickit once, on first launch, latched by a settings flag so a user who later turns it off — here or in System Settings — is never overridden on the next launch. The system owns the enabled state, so the Settings toggle reads it live rather than caching a copy that could drift.
 
 ## Privacy boundaries
 
@@ -275,12 +287,13 @@ The intended implementation is Carbon's `RegisterEventHotKey`, still the only pu
 - `Clear History` keeps pinned items by default; the Settings screen offers a separate destructive action that removes everything.
 - Unpinned history does not outlive a restart by default, which bounds how long a copied password or token can sit on disk.
 - Excluded applications are enforced in the monitor, before content reaches the store. Attribution is best-effort (`NSWorkspace.frontmostApplication`) and is marked as such in the UI, because it is a heuristic, not a guarantee of which process wrote to the pasteboard.
+- Accessibility permission is requested only when automatic pasting is enabled, and used for two things only — reading the caret position and posting Command-V. No window contents are ever read. See `CaretLocator` and `PasteSimulator`.
 
 ## Threading
 
-Clickit is a small, UI-driven application. Almost everything is `@MainActor`-isolated on purpose: `ClipboardMonitor`, `ClipboardStore`, `RetentionService`, `PasteboardService`, and `AppEnvironment`. This is not laziness — `NSPasteboard` and `NSStatusItem` are main-thread APIs, and the data volume (at most a few thousand small records) does not justify the complexity of cross-actor coordination.
+Clickit is a small, UI-driven application. Almost everything is `@MainActor`-isolated on purpose: `ClipboardMonitor`, `ClipboardStore`, `RetentionService`, `PasteboardService`, and `AppEnvironment`. `NSPasteboard` and `NSStatusItem` are main-thread APIs, and the data volume (at most a few thousand small records) does not justify the complexity of cross-actor coordination.
 
-The exception is `ImageStoring`, which is `Sendable` and does plain file I/O, so it can be moved off the main actor when image volumes justify it.
+Two deliberate carve-outs handle I/O and decoding off the main actor: `ImageStoring` is `Sendable` and does plain file I/O, and `ThumbnailCache` decodes thumbnails on a background `Task` before handing the result back to the main actor to cache.
 
 `SQLiteDatabase` is deliberately not thread-safe. It is owned by a `@MainActor` store, so every call already arrives on the main actor, and adding locking would guard against a caller that does not exist.
 

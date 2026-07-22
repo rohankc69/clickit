@@ -79,8 +79,8 @@ Write commit messages in the imperative mood, with a short subject line and a bo
 
 Clickit is in early development, and half-built features are expected. The rule is that they must be **visibly** half-built:
 
-- Never ship a stub that silently succeeds. `ShortcutService` is the reference example: it reports `isSupported == false` and throws, so a caller cannot mistake it for a working hotkey.
-- Mark unfinished behaviour in the UI. The Settings screen uses an explicit note for this.
+- Never ship a stub that silently succeeds. When a feature is only partly built, make the gap unmistakable in code and in the UI.
+- Mark unfinished behaviour in the UI. The reassignable global shortcut is the reference example: the binding works, but it is not editable yet, so Settings shows it read-only with a plain "cannot be changed yet" note rather than an editable field that does nothing.
 - Say so in the README status table and in ROADMAP.
 - If a feature is partly implemented, describe the limitation precisely. "Excluded applications use best-effort attribution and are not a security boundary" is useful; "may not always work" is not.
 

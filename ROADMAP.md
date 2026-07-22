@@ -43,22 +43,22 @@ History survives quitting.
 
 Phase 2 required no changes to views, retention rules, or the monitor. That was the point of the protocol.
 
-## Phase 3 — Images — Planned
+## Phase 3 — Images — In progress
 
 Phase 1 captures images already. Phase 3 makes them pleasant to work with.
 
 - [ ] Larger preview on hover or selection
 - [ ] Distinguish screenshots from other copied images
-- [ ] Thumbnail cache so list scrolling never decodes full-size PNGs
+- [x] Thumbnail cache so list scrolling never decodes full-size PNGs (shipped in 0.2.1)
 - [ ] Original dimensions and format shown in the row
 - [ ] Verify storage-size eviction against real screenshot volumes
 
-## Phase 4 — Native experience — Planned
+## Phase 4 — Native experience — In progress
 
-- [ ] Configurable global shortcut, implemented with `RegisterEventHotKey` (proposed default Option-V)
-- [ ] Shortcut recorder UI in Settings, with conflict detection
+- [x] Global shortcut to open at the cursor, via `RegisterEventHotKey` (default Command-Shift-V)
+- [ ] Make the shortcut reassignable: a recorder UI in Settings with conflict detection (it is fixed and shown read-only today)
 - [ ] Layout-aware key naming via `UCKeyTranslate`
-- [ ] Auto-paste after selecting an item, so Command-V is not needed. Decided on 2026-07-21 to ship this **enabled by default**. It requires Accessibility permission, which is a real trust cost for a clipboard manager, so the first-run prompt must explain precisely why it is needed and the feature must degrade to clipboard-only when permission is refused. PRIVACY.md and the README both need updating when this lands, since they currently state that Clickit requests no permissions.
+- [x] Auto-paste after selecting an item, so Command-V is not needed. Shipped enabled by default; it uses Accessibility permission, with a first-run prompt that explains why and a clipboard-only fallback when permission is refused
 - [x] Launch at login (`SMAppService`)
 - [ ] Excluded-applications picker instead of typed bundle identifiers
 - [ ] More reliable source-application attribution
@@ -68,9 +68,10 @@ Phase 1 captures images already. Phase 3 makes them pleasant to work with.
 
 - [x] Application icon
 - [x] Unsigned disk image build via `scripts/build-dmg.sh`
+- [x] Unsigned builds published to GitHub Releases (v0.1.0 onward)
 - [ ] Developer ID signing
 - [ ] Notarization and stapling
-- [ ] GitHub Releases with a signed archive
+- [ ] A signed, notarized archive on Releases
 - [ ] Homebrew Cask
 - [ ] Evaluate an update mechanism (Sparkle, or manual release checks) against the no-network commitment
 
