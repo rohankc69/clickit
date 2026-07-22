@@ -19,6 +19,11 @@ enum ClickitDesign {
     static let listHorizontalInset: CGFloat = 8
     static let thumbnailSide: CGFloat = 32
     static let thumbnailCornerRadius: CGFloat = 6
+
+    /// Pixel budget for a decoded thumbnail: the 32pt tile at up to 3× backing
+    /// scale. Decoding to this rather than full size is what keeps image history
+    /// off the heap. See `ImageDownsampler`.
+    static let thumbnailPixelSize = Int(thumbnailSide) * 3
 }
 
 /// Live vibrancy behind the caret panel.

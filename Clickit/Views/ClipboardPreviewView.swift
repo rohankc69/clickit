@@ -12,6 +12,10 @@ struct ClipboardPreviewView: View {
     /// translucent tile and secondary glyph would both disappear.
     var isHighlighted = false
 
+    /// Loaded off the render path in `.task`, not computed inline: a computed
+    /// property would re-read the file and re-decode on every redraw.
+    @State private var thumbnail: NSImage?
+
     private let side = ClickitDesign.thumbnailSide
     private let shape = RoundedRectangle(
         cornerRadius: ClickitDesign.thumbnailCornerRadius,
@@ -20,8 +24,8 @@ struct ClipboardPreviewView: View {
 
     var body: some View {
         Group {
-            if item.type == .image, let image = thumbnail {
-                Image(nsImage: image)
+            if item.type == .image, let thumbnail {
+                Image(nsImage: thumbnail)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
@@ -38,6 +42,15 @@ struct ClipboardPreviewView: View {
             )
         }
         .accessibilityHidden(true)
+        // Reloads when the row is reused for a different item; the cache makes a
+        // repeat load instant.
+        .task(id: item.id) {
+            guard item.type == .image else {
+                thumbnail = nil
+                return
+            }
+            thumbnail = await environment.thumbnail(for: item, maxPixelSize: ClickitDesign.thumbnailPixelSize)
+        }
     }
 
     private var symbolTile: some View {
@@ -48,10 +61,5 @@ struct ClipboardPreviewView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(isHighlighted ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
             }
-    }
-
-    private var thumbnail: NSImage? {
-        guard let data = environment.imageData(for: item) else { return nil }
-        return NSImage(data: data)
     }
 }

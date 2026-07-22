@@ -299,7 +299,7 @@ The project rule is that errors are neither force-unwrapped away nor silently sw
 
 ## Testing strategy
 
-110 unit tests, run with `xcodebuild test`.
+113 unit tests, run with `xcodebuild test`.
 
 The system boundary is the protocol seam. `PasteboardServicing` is mocked (`MockPasteboardService`), so capture, deduplication, self-write suppression and exclusion rules are all exercised deterministically without a window server. `ImageStoring` is *not* mocked — tests use the real service pointed at a scratch directory, so file creation and deletion behaviour is genuinely verified.
 

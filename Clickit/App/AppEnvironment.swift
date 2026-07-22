@@ -24,6 +24,7 @@ final class AppEnvironment {
     /// `self`, so it cannot be built before the other stored properties exist.
     @ObservationIgnored private(set) var monitor: ClipboardMonitor!
     @ObservationIgnored private let retention = RetentionService()
+    @ObservationIgnored private let thumbnails = ThumbnailCache()
     @ObservationIgnored private let sessionReset: SessionResetService
     @ObservationIgnored private let shortcuts: GlobalShortcutRegistering
     @ObservationIgnored private let accessibility: AccessibilityAuthorizing
@@ -495,9 +496,16 @@ final class AppEnvironment {
         }
     }
 
-    func imageData(for item: ClipboardItem) -> Data? {
-        guard item.type == .image else { return nil }
-        return try? clipboardStore.loadImageData(for: item)
+    /// A small, cached thumbnail for an image item, decoded off the main thread.
+    ///
+    /// The full-resolution bytes stay on disk and are only ever loaded when an
+    /// image is actually pasted (`restore`); the list renders from thumbnails a
+    /// fraction of their decoded size, which is what keeps browsing image history
+    /// from tracking every screenshot's pixels in memory.
+    func thumbnail(for item: ClipboardItem, maxPixelSize: Int) async -> NSImage? {
+        guard item.type == .image, let imagePath = item.imagePath else { return nil }
+        let fileURL = imageStorage.url(forRelativePath: imagePath)
+        return await thumbnails.thumbnail(id: item.id, fileURL: fileURL, maxPixelSize: maxPixelSize)
     }
 
     func delete(_ item: ClipboardItem) {
