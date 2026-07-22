@@ -80,6 +80,58 @@ final class StubLoginItemService: LoginItemManaging {
     }
 }
 
+@MainActor
+final class StubShortcutService: GlobalShortcutRegistering {
+    var isSupported = true
+    var registrationFailures: [GlobalShortcutAction: Error] = [:]
+    private(set) var configurations: [GlobalShortcutAction: KeyboardShortcutConfiguration] = [:]
+    private var handlers: [GlobalShortcutAction: @MainActor () -> Void] = [:]
+
+    func register(
+        _ configuration: KeyboardShortcutConfiguration,
+        for action: GlobalShortcutAction,
+        handler: @escaping @MainActor () -> Void
+    ) throws {
+        if let failure = registrationFailures[action] { throw failure }
+        configurations[action] = configuration
+        handlers[action] = handler
+    }
+
+    func unregister(_ action: GlobalShortcutAction) {
+        configurations[action] = nil
+        handlers[action] = nil
+    }
+
+    func unregisterAll() {
+        configurations.removeAll()
+        handlers.removeAll()
+    }
+
+    func trigger(_ action: GlobalShortcutAction) {
+        handlers[action]?()
+    }
+}
+
+@MainActor
+final class StubScreenshotService: ScreenshotCapturing {
+    private(set) var captureCount = 0
+    private(set) var cancelCount = 0
+    var failure: Error?
+    var completionFailure: String?
+
+    func captureSelectionToClipboard(
+        onFailure: @escaping @MainActor @Sendable (String) -> Void
+    ) throws {
+        if let failure { throw failure }
+        captureCount += 1
+        if let completionFailure { onFailure(completionFailure) }
+    }
+
+    func cancel() {
+        cancelCount += 1
+    }
+}
+
 /// Base class that provides a scratch image directory and isolated defaults.
 @MainActor
 class ClickitTestCase: XCTestCase {
@@ -145,6 +197,8 @@ class ClickitTestCase: XCTestCase {
     func makeEnvironment(
         settings: ClickitSettings = .default,
         pasteboard: MockPasteboardService = MockPasteboardService(),
+        shortcuts: GlobalShortcutRegistering = StubShortcutService(),
+        screenshots: ScreenshotCapturing = StubScreenshotService(),
         accessibility: AccessibilityAuthorizing = StubAccessibilityService(),
         loginItem: LoginItemManaging = StubLoginItemService()
     ) -> AppEnvironment {
@@ -153,7 +207,8 @@ class ClickitTestCase: XCTestCase {
             imageStorage: imageStorage,
             clipboardStore: makeStore(),
             pasteboard: pasteboard,
-            shortcuts: ShortcutService(),
+            shortcuts: shortcuts,
+            screenshots: screenshots,
             accessibility: accessibility,
             loginItem: loginItem
         )

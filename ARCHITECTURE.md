@@ -263,11 +263,11 @@ Cleanup runs at launch, after every capture, and whenever retention settings cha
 
 ## Shortcut handling
 
-`ShortcutService` conforms to `GlobalShortcutRegistering`, reports `isSupported == true`, and registers a system-wide hotkey through Carbon's `RegisterEventHotKey` — the only public API for a global hotkey that does **not** require Accessibility permission. `AppEnvironment` registers the binding on launch, and a failure to claim it (another app already holds the combination) is surfaced in Settings rather than treated as fatal.
+`ShortcutService` conforms to `GlobalShortcutRegistering`, reports `isSupported == true`, and registers system-wide hotkeys through Carbon's `RegisterEventHotKey` — the only public API for global hotkeys that does **not** require Accessibility permission. `AppEnvironment` registers each binding on launch, and a failure to claim one (another app already holds the combination) is surfaced in Settings rather than treated as fatal.
 
-The binding is a value type, `KeyboardShortcutConfiguration`, stored as a virtual key code plus modifier flags rather than a character, so it survives keyboard-layout changes. The default is Command-Shift-V, defined in exactly one place. It is not yet reassignable: Settings shows it read-only until the recorder UI lands (roadmap Phase 4).
+Bindings use the `KeyboardShortcutConfiguration` value type, stored as a virtual key code plus modifier flags rather than a character so they survive keyboard-layout changes. Command-Shift-V opens Clickit, and Option-Shift-S captures a selected area to the clipboard. They are not yet reassignable: Settings shows them read-only until the recorder UI lands (roadmap Phase 4).
 
-The handler fires `AppEnvironment.openPopoverRequested`, wired to `MenuBarController.showPopover`, so a shortcut press opens the same popover as a click on the menu-bar icon.
+The open handler fires `AppEnvironment.openPopoverRequested`, wired to `MenuBarController.showPopover`, so a shortcut press opens the same popover as a click on the menu-bar icon. The screenshot handler asks `ScreenshotService` to launch `/usr/sbin/screencapture -i -c`, using macOS's native interactive selector and directing the result to the clipboard. Screen Recording permission is checked before launch, repeated presses cannot create overlapping selectors, and shutdown cancels an active selection. When monitoring is active, the ordinary monitor records the result; the screenshot path does not bypass clipboard privacy checks or storage rules.
 
 ## Automatic paste
 
@@ -312,7 +312,7 @@ The project rule is that errors are neither force-unwrapped away nor silently sw
 
 ## Testing strategy
 
-113 unit tests, run with `xcodebuild test`.
+134 unit tests, run with `xcodebuild test`.
 
 The system boundary is the protocol seam. `PasteboardServicing` is mocked (`MockPasteboardService`), so capture, deduplication, self-write suppression and exclusion rules are all exercised deterministically without a window server. `ImageStoring` is *not* mocked — tests use the real service pointed at a scratch directory, so file creation and deletion behaviour is genuinely verified.
 

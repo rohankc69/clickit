@@ -93,6 +93,8 @@ Please read these. They are the difference between what Clickit does today and w
 
 **No sandbox.** Clickit is not sandboxed, because it writes to the conventional `~/Library/Application Support/` location.
 
+**Screen Recording permission is used only for a screenshot you request.** Pressing Option-Shift-S launches macOS's native interactive area selector and directs the selected image to the clipboard. Clickit does not record the screen continuously, and this code path does not run until you press the shortcut. Declining the permission leaves clipboard history and the macOS screenshot shortcuts working normally.
+
 **Accessibility permission is requested, and is optional.** Clickit asks for it the first time you enable automatic pasting. It uses the permission for exactly two things: reading the position of the text cursor in the frontmost application so the panel can open there, and posting a Command-V keystroke so a picked item lands where you were typing.
 
 The permission grants the ability to read the contents of other applications' windows. Clickit does not do that. It reads one attribute, the selected text range of the focused element, and only at the moment you press the shortcut. Nothing read this way is stored, and no window contents are inspected. Decline the permission, or turn automatic pasting off, and neither code path runs — the panel opens at the pointer and you press Command-V yourself.

@@ -215,7 +215,15 @@ private struct ShortcutsSettingsView: View {
                         .font(.callout)
                         .foregroundStyle(.orange)
                 }
-                Caption("Cannot be changed yet.")
+                LabeledContent("Select screenshot to clipboard") {
+                    KeyCombination(KeyboardShortcutConfiguration.captureSelection.displayString)
+                }
+                if let shortcutError = environment.screenshotShortcutError {
+                    Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+                Caption("Shortcuts cannot be changed yet.")
             } header: {
                 Text("Anywhere")
             }

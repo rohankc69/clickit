@@ -18,7 +18,7 @@ Don't rely on Clickit as your only copy of anything.
 | --- | --- |
 | Menu-bar popover: search, pin, delete | Signed, notarized release |
 | Text, link, image and screenshot capture | Homebrew |
-| Command-Shift-V to open at the text cursor | A reassignable shortcut |
+| Command-Shift-V to open; Option-Shift-S to capture | Reassignable shortcuts |
 | Launch at login | Reliable per-app exclusion |
 | Duplicate detection, retention, cleanup | |
 | History across quits, cleared on restart | |
@@ -27,6 +27,7 @@ Don't rely on Clickit as your only copy of anything.
 
 - Lives in the menu bar — no Dock icon, no window to manage.
 - **Command-Shift-V** opens it at your text cursor; pick an item and it pastes right there. Command-V is never touched, so ordinary paste is unchanged everywhere.
+- **Option-Shift-S** starts the native area selector and copies the screenshot to the clipboard. Clickit records it while monitoring is active.
 - Records text, links, images and screenshots, sorted by type automatically.
 - Search as you type. Pin what you want to keep; delete the rest.
 - Copy the same thing twice and the existing entry moves up instead of piling on a duplicate.
@@ -148,20 +149,27 @@ See [PRIVACY.md](PRIVACY.md) for the full statement.
 
 ## Getting a screenshot into history
 
-macOS saves screenshots to a file by default, which never touches the clipboard, so Clickit doesn't see them. To send one to the clipboard instead:
+Press **Option-Shift-S** anywhere while Clickit is running. The native macOS crosshair appears; drag over an area and release to copy the screenshot to the clipboard. When monitoring is active, Clickit records it like any other copied image. Press Escape to cancel.
 
-| Shortcut | Result |
+This is a Clickit global shortcut. macOS may ask for Screen Recording permission the first time it is used. The system's own default screenshot shortcuts also work:
+
+| Default shortcut | Result |
 | --- | --- |
 | `Command-Shift-3` / `Command-Shift-4` | Saves a file. Clickit doesn't see it. |
 | `Command-Control-Shift-3` / `Command-Control-Shift-4` | Copies to the clipboard. Clickit records it. |
 
-If the four-key chord is awkward, rebind it under **System Settings → Keyboard → Keyboard Shortcuts → Screenshots** ("Copy picture of selected area to the clipboard"). Avoid combinations apps already use, like `Command-Shift-S` — a system shortcut overrides app shortcuts everywhere.
-
-Clickit deliberately doesn't capture the screen itself. That would need Screen Recording permission and would duplicate what macOS already does well.
+Your macOS shortcuts may differ if they were changed in **System Settings → Keyboard → Keyboard Shortcuts → Screenshots**. Any binding that copies the image instead of saving it works with Clickit. If the defaults above do not work, check the current binding for "Copy picture of selected area to the clipboard" in System Settings.
 
 ## Keyboard shortcuts
 
-Command-Shift-V opens Clickit at your cursor from anywhere. Inside the popover:
+These work globally while Clickit is running:
+
+| Key | Action |
+| --- | --- |
+| Option-Shift-S | Select an area and copy the screenshot to the clipboard |
+| Command-Shift-V | Open Clickit at the text cursor |
+
+Inside the popover:
 
 | Key | Action |
 | --- | --- |
@@ -178,7 +186,7 @@ Command-Shift-V opens Clickit at your cursor from anywhere. Inside the popover:
 | Command-Comma | Open Settings |
 | Command-Q | Quit Clickit |
 
-Then press **Command-V** wherever you want to paste. The opening shortcut isn't reassignable yet; Settings shows it read-only.
+Then press **Command-V** wherever you want to paste. The global shortcuts aren't reassignable yet; Settings shows them read-only.
 
 ## Roadmap
 
