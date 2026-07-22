@@ -5,6 +5,12 @@ All notable changes to Clickit are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-21
+
+### Documentation
+
+- Brought the README and the ARCHITECTURE, ROADMAP, CONTRIBUTING and SECURITY docs in line with what has shipped — the global shortcut, automatic paste, launch at login, persistence, and thumbnail downsampling — and pointed installation at the GitHub Releases download. No application changes; the build is identical to 0.2.1.
+
 ## [0.2.1] - 2026-07-21
 
 ### Fixed
