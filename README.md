@@ -2,80 +2,54 @@
 
 # Clickit
 
-Clickit is a lightweight, open-source clipboard-history utility for macOS. It lives in the menu bar and lets users find and reuse recently copied text, links, images, and screenshots without sending data to the cloud.
-
----
-
-## Development status
-
-**Early development. Not production-ready.**
-
-Clickit is at the end of roadmap **Phase 2**. The core loop works — copy, find, restore, paste — and history now survives quitting. The app is not signed, not notarized, and not distributed, so building from source is the only way to run it.
-
-Do not rely on Clickit as your only copy of anything.
-
-| Area | Status |
-| --- | --- |
-| Menu-bar app, popover UI | Working |
-| Text / URL / image capture | Working |
-| Duplicate detection, search, pin, delete | Working |
-| Retention and cleanup rules | Working |
-| Image files on disk | Working |
-| History survives quitting Clickit | Working |
-| History cleared on Mac restart | Working |
-| Global shortcut | Not implemented — Phase 4 |
-| Launch at login | Not implemented — Phase 4 |
-| Excluded applications | Partial — see [Privacy](#privacy) |
-| Unsigned disk image build | Working |
-| Signed release, notarization, Homebrew | Not available — Phase 5 |
-
-## Screenshot
+Clipboard history for the macOS menu bar. Keep copying and pasting the way you always have — Clickit records what you copy in the background, and one keystroke brings back anything from your recent history: text, links, images, screenshots. Nothing leaves your Mac.
 
 <p align="center">
   <img src="assets/screenshot-popover.png" alt="Clickit menu-bar popover showing recent clipboard history" width="320">
 </p>
 
-## Core features
+## Status
 
-- **Menu-bar only.** No Dock icon, no window clutter. Click the icon for a compact popover.
-- **Additive, never disruptive.** Command-C and Command-V keep working exactly as macOS intends. Clickit only watches and restores.
-- **Text, links, images and screenshots.** Content is classified automatically.
-- **Search** across your history as you type.
-- **Pin** items you want to keep, **delete** the ones you do not.
-- **Duplicate-aware.** Copying the same thing twice moves the existing entry to the top instead of piling up.
-- **Pause monitoring** at any time; the menu-bar icon shows which mode you are in.
-- **Capture confirmation.** The menu-bar icon briefly shows a checkmark when something is recorded, so you know it landed.
-- **Automatic cleanup** with configurable size, count and age limits.
-- **Persistent across app restarts.** History is kept in a local SQLite database, so quitting Clickit or having it crash loses nothing.
-- **Cleared when the Mac restarts.** History is a working set for the current session, not an archive. Pinned items are always kept. This is a setting, so you can turn it off.
-- **Local only.** No network requests, no accounts, no telemetry, no AI.
+Early, and unsigned. The loop works — copy, search, restore, paste — history survives quitting, and the global shortcut and launch-at-login are in. What it is not yet: signed, notarized, or on Homebrew, so the first launch takes one extra step (see [Installation](#installation)).
+
+Don't rely on Clickit as your only copy of anything.
+
+| Working | Not yet |
+| --- | --- |
+| Menu-bar popover: search, pin, delete | Signed, notarized release |
+| Text, link, image and screenshot capture | Homebrew |
+| Command-Shift-V to open at the text cursor | A reassignable shortcut |
+| Launch at login | Reliable per-app exclusion |
+| Duplicate detection, retention, cleanup | |
+| History across quits, cleared on restart | |
+
+## What it does
+
+- Lives in the menu bar — no Dock icon, no window to manage.
+- **Command-Shift-V** opens it at your text cursor; pick an item and it pastes right there. Command-V is never touched, so ordinary paste is unchanged everywhere.
+- Records text, links, images and screenshots, sorted by type automatically.
+- Search as you type. Pin what you want to keep; delete the rest.
+- Copy the same thing twice and the existing entry moves up instead of piling on a duplicate.
+- History lives in a local SQLite database, survives quitting or a crash, and clears on restart. Pinned items always stay.
 
 ## Installation
 
-There is no signed release and Clickit is **not on Homebrew**. You can either build from source, or package an unsigned disk image yourself:
+Download the latest `.dmg` from [**Releases**](https://github.com/rohankc69/clickit/releases/latest), open it, and drag Clickit to Applications.
 
-```bash
-./scripts/build-dmg.sh
-```
-
-That produces `dist/Clickit-<version>.dmg` with the usual drag-to-Applications layout.
-
-### Opening an unsigned build
-
-The disk image is **not signed with a Developer ID and not notarized**. It runs fine on the machine that built it, but on any other Mac macOS will refuse to open it, usually reporting that the app "is damaged and can't be opened". That message is misleading: it means unsigned, not corrupt.
-
-To open it anyway, the quarantine flag has to be removed after copying to Applications:
+Because the build isn't signed or notarized yet, macOS blocks it on first launch — usually claiming it "is damaged and can't be opened". It isn't damaged; it's unsigned. Clear the quarantine flag once, after copying to Applications:
 
 ```bash
 xattr -d com.apple.quarantine /Applications/Clickit.app
 ```
 
-Only do this for a build you produced yourself or otherwise trust. Removing quarantine defeats a real safety check, and it is not something to ask users to do routinely. Signing and notarization are roadmap Phase 5, and are what would make this step unnecessary.
+Only do this for a build you trust. Removing quarantine defeats a real safety check, so it isn't something to hand to users casually — signing and notarization, which would make the step unnecessary, are on the roadmap.
+
+Prefer to build it yourself? See [Development setup](#development-setup) below, or package your own disk image with `./scripts/build-dmg.sh` (output in `dist/`).
 
 ## Requirements
 
 - macOS 14.0 (Sonoma) or later
-- Xcode 16 or later to build from source
+- Xcode 16 or later, to build from source
 - No third-party dependencies
 
 ## Development setup
@@ -86,19 +60,19 @@ cd clickit
 open Clickit.xcodeproj
 ```
 
-Then press Command-R. Or from the command line:
+Press Command-R, or from the command line:
 
 ```bash
 # Build
 xcodebuild build -project Clickit.xcodeproj -scheme Clickit -destination 'platform=macOS'
 
-# Run the tests
+# Test
 xcodebuild test -project Clickit.xcodeproj -scheme Clickit -destination 'platform=macOS'
 ```
 
-The app launches with no Dock icon (`LSUIElement`); look for the clipboard icon in the menu bar. Clickit is **not sandboxed**, because it writes to `~/Library/Application Support/Clickit/`.
+The app launches with no Dock icon (`LSUIElement`) — look for the clipboard icon in the menu bar. Clickit is **not sandboxed**, because it writes to `~/Library/Application Support/Clickit/`.
 
-Logs, which contain metadata only and never clipboard contents:
+Logs carry metadata only, never clipboard contents:
 
 ```bash
 log stream --info --predicate 'subsystem == "com.clickit.Clickit"'
@@ -106,31 +80,29 @@ log stream --info --predicate 'subsystem == "com.clickit.Clickit"'
 
 ## How clipboard monitoring works
 
-macOS provides no notification when the system pasteboard changes, so the only available mechanism is polling. `ClipboardMonitor` samples `NSPasteboard.general.changeCount` — a single integer — every 0.5 s by default, and only reads the actual pasteboard contents when that integer has moved. The poll is cheap and does not meaningfully register in Activity Monitor.
+macOS gives no notification when the pasteboard changes, so polling is the only option. `ClipboardMonitor` samples `NSPasteboard.general.changeCount` — a single integer — every 0.5 s, and only reads the actual contents when that number moves. The poll is cheap enough not to register in Activity Monitor.
 
-When a change is detected, Clickit:
+On a change, Clickit:
 
-1. Skips it entirely if the writing app marked it as concealed, transient, or auto-generated.
-2. Reads and classifies the content as text, URL, or image.
-3. Skips it if it is empty, unsupported, or came from an excluded app.
-4. Skips it if the change was Clickit's own write (restoring an item must not read back as a fresh copy).
-5. Hashes the content with SHA-256 to detect duplicates.
+1. Skips it if the writing app marked it concealed, transient, or auto-generated.
+2. Reads and classifies it as text, URL, or image.
+3. Skips it if it's empty, unsupported, or from an excluded app.
+4. Skips it if the change was Clickit's own write — restoring an item must not read back as a fresh copy.
+5. Hashes it with SHA-256 to catch duplicates.
 6. Moves an existing duplicate to the top, or records a new entry.
-7. Runs the retention cleanup.
+7. Runs cleanup.
 
 ## Pasting
 
-Press Command-Shift-V in any application and Clickit opens at your text cursor. Pick an item and it is pasted there.
+Press Command-Shift-V in any app and Clickit opens at your text cursor. Pick an item and it pastes there. Command-V is never bound — ordinary paste keeps working exactly as it always has, everywhere.
 
-Command-V is never taken. Ordinary paste keeps working exactly as it always has, everywhere.
+Two parts of this need macOS Accessibility permission: finding the cursor, and pressing Command-V for you. Clickit asks the first time you turn on automatic pasting, and works without it in a reduced form — the panel opens at the pointer instead of the cursor, the item lands on the clipboard, and you press Command-V yourself. Turn automatic pasting off in Settings and the permission is never needed.
 
-Two parts of this need macOS Accessibility permission: finding the text cursor, and pressing Command-V on your behalf. Clickit asks for it when you first enable automatic pasting, and works without it in a reduced form — the panel opens at the pointer instead of the cursor, the item is placed on the clipboard, and you press Command-V yourself. Automatic pasting can be turned off in Settings, in which case the permission is never needed.
-
-Locating the cursor depends on the application reporting it. Native text fields do; some web views and cross-platform apps do not, and Clickit then falls back to the focused window, then the pointer.
+Finding the cursor depends on the app reporting it. Native text fields do; some web views and cross-platform apps don't, and Clickit then falls back to the focused window, then the pointer.
 
 ## Local storage
 
-Everything lives on your Mac, under:
+Everything lives on your Mac:
 
 ```
 ~/Library/Application Support/Clickit/
@@ -138,15 +110,13 @@ Everything lives on your Mac, under:
 └── Images/          # PNG files for copied images and screenshots
 ```
 
-Text and metadata live in a local SQLite database. Image bytes are kept as separate files on disk, with only the filename recorded on the entry, so browsing history never pages megabytes of screenshots into memory.
-
-The database is read into memory once at launch and kept as a write-through cache, so search stays instant while every change is committed to disk immediately. Nothing is written anywhere else on your system.
+Text and metadata go in a local SQLite database. Image bytes are kept as separate files, with only the filename on the entry, and the list renders from small cached thumbnails — so browsing history never pages full-size screenshots into memory. The database is read in once at launch and kept as a write-through cache: search stays instant while every change commits to disk immediately. Nothing is written anywhere else.
 
 ### How long history is kept
 
-Two mechanisms, in order of which one usually fires:
+Two mechanisms, in the order they usually fire.
 
-**Restarting the Mac clears unpinned history.** This is the main lifecycle and is on by default. Clipboard history is a working set for the session you are in, and holding weeks of screenshots and text is both more than anyone reuses and more exposure than it is worth. Quitting and relaunching Clickit clears nothing — only a genuine restart does, detected by reading the system boot time.
+**Restarting the Mac clears unpinned history.** This is the main lifecycle, on by default. Clipboard history is a working set for the session you're in; holding weeks of it is both more than anyone reuses and more exposure than it's worth. Quitting and relaunching Clickit clears nothing — only a real restart does, detected from the system boot time.
 
 **Retention limits are the backstop**, for machines that go a long time between restarts:
 
@@ -156,49 +126,49 @@ Two mechanisms, in order of which one usually fires:
 | Maximum storage | 500 MB |
 | Text and link retention | 30 days |
 | Image and screenshot retention | 7 days |
-| Pinned items | Never expire, never auto-deleted |
+| Pinned items | Never expire |
 
-All of these are configurable in Settings, including turning off the restart behaviour. Cleanup runs at launch, after every capture, and whenever retention settings change. It removes expired unpinned items first, then the oldest unpinned items over the count limit, then the oldest unpinned *images* over the size limit. Removing an image record always deletes its file.
+All configurable in Settings, including turning the restart behaviour off. Cleanup runs at launch, after every capture, and whenever retention settings change: it removes expired unpinned items first, then the oldest unpinned items over the count limit, then the oldest unpinned *images* over the size limit. Removing an image record always deletes its file.
 
 ## Privacy
 
-Clipboard history is sensitive by nature — it accumulates passwords, tokens, private messages and screenshots without you thinking about it. Clickit's position is that this data should never leave your machine.
+Clipboard history is sensitive by nature — it collects passwords, tokens, private messages and screenshots without you thinking about it. Clickit's stance is that this never leaves your machine.
 
-- **No network requests.** Clickit makes none, at all.
-- **No accounts, no cloud sync, no cross-device sync.**
-- **No telemetry, no analytics, no crash reporting.**
-- **No AI or content analysis.** Clickit does not read, classify, or OCR your clipboard beyond deciding whether it is text, a link, or an image.
-- **Logs contain metadata only** — type and byte size, never contents.
-- **Pause monitoring** and **Clear history** are always one click away.
-- **Password managers can opt out.** Clickit honours the [nspasteboard.org](http://nspasteboard.org) conventions, so content marked concealed, transient, or auto-generated is never read or recorded. This depends on the source application setting the marker.
+- No network requests, at all.
+- No accounts, no cloud, no cross-device sync.
+- No telemetry, analytics, or crash reporting.
+- No AI or content analysis. Clickit decides only whether something is text, a link, or an image — it doesn't read, classify, or OCR it.
+- Logs hold metadata only — type and byte size, never contents.
+- Pause monitoring and Clear history are always one click away.
+- Password managers can opt out: Clickit honours the [nspasteboard.org](http://nspasteboard.org) conventions, so anything marked concealed, transient, or auto-generated is never read or recorded. This relies on the source app setting the marker.
 
-**Excluded applications are only partly implemented.** You can add bundle identifiers in Settings, and copies from those apps are dropped. However, attribution uses the frontmost application at the moment of the copy, which is a best-effort guess rather than a guarantee of which process wrote to the pasteboard. Do not treat it as a security boundary yet. A proper app picker and more reliable attribution are Phase 4.
+**Per-app exclusion is only partly implemented.** You can add bundle identifiers in Settings and copies from those apps are dropped, but attribution uses the frontmost app at the moment of the copy — a best-effort guess, not proof of which process wrote to the pasteboard. Don't treat it as a security boundary yet.
 
 See [PRIVACY.md](PRIVACY.md) for the full statement.
 
-## Screenshots
+## Getting a screenshot into history
 
-macOS saves screenshots to a file by default, which never touches the clipboard, so Clickit does not see them. To send one to the clipboard instead, use the built-in system shortcuts:
+macOS saves screenshots to a file by default, which never touches the clipboard, so Clickit doesn't see them. To send one to the clipboard instead:
 
 | Shortcut | Result |
 | --- | --- |
-| `Command-Shift-3` / `Command-Shift-4` | Saves a file. Clickit does not see it. |
+| `Command-Shift-3` / `Command-Shift-4` | Saves a file. Clickit doesn't see it. |
 | `Command-Control-Shift-3` / `Command-Control-Shift-4` | Copies to the clipboard. Clickit records it. |
 
-If the four-key chord is awkward, rebind it: **System Settings, Keyboard, Keyboard Shortcuts, Screenshots**, then change "Copy picture of selected area to the clipboard" to whatever you prefer. Avoid combinations that applications already use, such as `Command-Shift-S`, because a system shortcut overrides application shortcuts everywhere.
+If the four-key chord is awkward, rebind it under **System Settings → Keyboard → Keyboard Shortcuts → Screenshots** ("Copy picture of selected area to the clipboard"). Avoid combinations apps already use, like `Command-Shift-S` — a system shortcut overrides app shortcuts everywhere.
 
-Clickit deliberately does not capture the screen itself. Doing so would require Screen Recording permission and would duplicate what macOS already does well.
+Clickit deliberately doesn't capture the screen itself. That would need Screen Recording permission and would duplicate what macOS already does well.
 
 ## Keyboard shortcuts
 
-Inside the popover:
+Command-Shift-V opens Clickit at your cursor from anywhere. Inside the popover:
 
 | Key | Action |
 | --- | --- |
 | Up / Down | Move through history |
 | Return | Restore the selected item and close |
 | Command-1 to 9 | Restore by position |
-| Escape | Clear the search, or close if the search is empty |
+| Escape | Clear the search, or close if it's empty |
 | Command-F | Focus the search field |
 | Command-P | Pin or unpin the selected item |
 | Delete | Delete the selected item (when the search field is empty) |
@@ -208,25 +178,19 @@ Inside the popover:
 | Command-Comma | Open Settings |
 | Command-Q | Quit Clickit |
 
-Then press **Command-V** wherever you want to paste. The full list is also in Settings under Shortcuts.
-
-> The global shortcut to open Clickit from anywhere (proposed default Option-V) is **not implemented yet**. Settings shows it as unavailable rather than pretending it works. See Phase 4.
+Then press **Command-V** wherever you want to paste. The opening shortcut isn't reassignable yet; Settings shows it read-only.
 
 ## Roadmap
 
-Phases 1 and 2 are complete: the menu-bar app, clipboard monitoring, restore, the popover, and local persistence. Phase 3 adds richer image support, Phase 4 the global shortcut and launch-at-login, Phase 5 a signed and notarized release.
-
-Full detail in [ROADMAP.md](ROADMAP.md).
+The menu-bar app, clipboard monitoring, restore, the popover, local persistence, the global shortcut, and launch at login are all done. Still ahead: more reliable per-app exclusion, richer image handling, and a signed, notarized release with a Homebrew cask. Full detail in [ROADMAP.md](ROADMAP.md).
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, coding standards, and testing expectations, and [ARCHITECTURE.md](ARCHITECTURE.md) to understand how the pieces fit together before making structural changes.
-
-Everyone participating is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, coding standards, and testing expectations, and [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces fit before making structural changes. Everyone participating follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 
-Please **do not** open a public issue for security problems. See [SECURITY.md](SECURITY.md) for how to report them privately.
+Please **don't** open a public issue for security problems — see [SECURITY.md](SECURITY.md) for how to report them privately.
 
 ## License
 
