@@ -27,6 +27,7 @@ final class AppEnvironment {
     @ObservationIgnored private let thumbnails = ThumbnailCache()
     @ObservationIgnored private let sessionReset: SessionResetService
     @ObservationIgnored private let shortcuts: GlobalShortcutRegistering
+    @ObservationIgnored private let screenshots: ScreenshotCapturing
     @ObservationIgnored private let accessibility: AccessibilityAuthorizing
     @ObservationIgnored private let loginItem: LoginItemManaging
 
@@ -231,6 +232,7 @@ final class AppEnvironment {
         clipboardStore: (any ClipboardStoring)? = nil,
         pasteboard: PasteboardServicing = PasteboardService(),
         shortcuts: GlobalShortcutRegistering = ShortcutService(),
+        screenshots: ScreenshotCapturing = ScreenshotService(),
         sessionReset: SessionResetService = SessionResetService(),
         accessibility: AccessibilityAuthorizing = AccessibilityService(),
         loginItem: LoginItemManaging = LoginItemService()
@@ -238,6 +240,7 @@ final class AppEnvironment {
         self.settingsStore = settingsStore
         self.pasteboard = pasteboard
         self.shortcuts = shortcuts
+        self.screenshots = screenshots
         self.sessionReset = sessionReset
         self.accessibility = accessibility
         self.loginItem = loginItem
@@ -336,20 +339,22 @@ final class AppEnvironment {
             monitor.start()
         }
         registerGlobalShortcut()
+        registerScreenshotShortcut()
     }
 
     func stop() {
         monitor.stop()
-        shortcuts.unregister()
+        shortcuts.unregisterAll()
+        screenshots.cancel()
     }
 
     /// A shortcut already claimed by another application is a normal outcome,
-    /// not a crash: it is surfaced so the user can pick a different one, and
-    /// the rest of startup continues either way.
+    /// not a crash: it is surfaced in Settings, and the rest of startup
+    /// continues either way.
     func registerGlobalShortcut() {
         guard shortcuts.isSupported else { return }
         do {
-            try shortcuts.register(settingsStore.settings.openShortcut) { [weak self] in
+            try shortcuts.register(settingsStore.settings.openShortcut, for: .openClickit) { [weak self] in
                 self?.openPopoverRequested?()
             }
             shortcutError = nil
@@ -362,6 +367,37 @@ final class AppEnvironment {
     /// Shown in Settings next to the shortcut rather than as a popover banner,
     /// since that is where the user can act on it.
     var shortcutError: String?
+
+    /// Kept separate so one failed binding does not make the other look broken.
+    var screenshotShortcutError: String?
+
+    private func registerScreenshotShortcut() {
+        guard shortcuts.isSupported else { return }
+        do {
+            try shortcuts.register(.captureSelection, for: .captureSelection) { [weak self] in
+                self?.captureScreenshotSelection()
+            }
+            screenshotShortcutError = nil
+        } catch {
+            ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
+            screenshotShortcutError = error.localizedDescription
+        }
+    }
+
+    private func captureScreenshotSelection() {
+        do {
+            try screenshots.captureSelectionToClipboard { [weak self] message in
+                self?.reportScreenshotFailure(message)
+            }
+        } catch {
+            reportScreenshotFailure("Could not start screenshot selection. \(error.localizedDescription)")
+        }
+    }
+
+    private func reportScreenshotFailure(_ message: String) {
+        ClickitLog.app.error("\(message, privacy: .public)")
+        lastErrorMessage = message
+    }
 
     /// Applies a new binding, keeping the old one if registration fails so the
     /// user is never left with no working shortcut.

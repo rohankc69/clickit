@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import Foundation
 
-/// A user-replaceable global hotkey.
+/// A global hotkey binding.
 ///
 /// Stored as a virtual key code plus modifier flags rather than a character so
 /// the binding survives keyboard-layout changes — the same physical key keeps
@@ -25,6 +25,13 @@ struct KeyboardShortcutConfiguration: Codable, Equatable, Sendable {
     static let `default` = KeyboardShortcutConfiguration(
         keyCode: 0x09,
         modifierFlagsRawValue: NSEvent.ModifierFlags([.command, .shift]).rawValue
+    )
+
+    /// Option-Shift-S starts an interactive selection screenshot and copies it
+    /// to the clipboard. It avoids macOS's longer Control-Command-Shift-4 chord.
+    static let captureSelection = KeyboardShortcutConfiguration(
+        keyCode: 0x01,
+        modifierFlagsRawValue: NSEvent.ModifierFlags([.option, .shift]).rawValue
     )
 
     var displayString: String {
@@ -70,6 +77,11 @@ struct KeyboardShortcutConfiguration: Codable, Equatable, Sendable {
     }
 }
 
+enum GlobalShortcutAction: UInt32, Sendable {
+    case openClickit = 1
+    case captureSelection = 2
+}
+
 enum GlobalShortcutError: LocalizedError {
     case invalidShortcut
     case registrationFailed(status: OSStatus)
@@ -80,18 +92,23 @@ enum GlobalShortcutError: LocalizedError {
             "A global shortcut needs at least one modifier key."
         case .registrationFailed(let status):
             status == OSStatus(eventHotKeyExistsErr)
-                ? "That shortcut is already claimed by another application. Pick a different one."
+                ? "That shortcut is already claimed by another application. Change the conflicting shortcut and relaunch Clickit."
                 : "The shortcut could not be registered (error \(status))."
         }
     }
 }
 
-/// Registers a system-wide hotkey that opens the clipboard popover.
+/// Registers Clickit's system-wide hotkey actions.
 @MainActor
 protocol GlobalShortcutRegistering: AnyObject {
     var isSupported: Bool { get }
-    func register(_ configuration: KeyboardShortcutConfiguration, handler: @escaping @MainActor () -> Void) throws
-    func unregister()
+    func register(
+        _ configuration: KeyboardShortcutConfiguration,
+        for action: GlobalShortcutAction,
+        handler: @escaping @MainActor () -> Void
+    ) throws
+    func unregister(_ action: GlobalShortcutAction)
+    func unregisterAll()
 }
 
 /// Registers a system-wide hotkey through Carbon's `RegisterEventHotKey`.
@@ -104,56 +121,30 @@ protocol GlobalShortcutRegistering: AnyObject {
 final class ShortcutService: GlobalShortcutRegistering {
     var isSupported: Bool { true }
 
-    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyRefs: [GlobalShortcutAction: EventHotKeyRef] = [:]
     private var eventHandler: EventHandlerRef?
-    private var handler: (@MainActor () -> Void)?
+    private var handlers: [GlobalShortcutAction: @MainActor () -> Void] = [:]
 
     /// Four-character signature identifying Clickit's hotkeys to Carbon.
     private static let signature: OSType = 0x434C_4B54  // "CLKT"
 
     // No `deinit` cleanup: the Carbon refs are main-actor state and a
-    // nonisolated deinit cannot touch them. Owners call `unregister()` —
+    // nonisolated deinit cannot touch them. Owners call `unregisterAll()` —
     // `AppEnvironment.stop()` does, from `applicationWillTerminate`.
 
-    func register(_ configuration: KeyboardShortcutConfiguration, handler: @escaping @MainActor () -> Void) throws {
+    func register(
+        _ configuration: KeyboardShortcutConfiguration,
+        for action: GlobalShortcutAction,
+        handler: @escaping @MainActor () -> Void
+    ) throws {
         guard configuration.isValid else { throw GlobalShortcutError.invalidShortcut }
 
-        unregister()
-        self.handler = handler
+        unregister(action)
+        try installEventHandlerIfNeeded()
+        handlers[action] = handler
 
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
-        let context = Unmanaged.passUnretained(self).toOpaque()
-
-        InstallEventHandler(
-            GetApplicationEventTarget(),
-            { _, event, context in
-                guard let event, let context else { return OSStatus(eventNotHandledErr) }
-
-                var pressedID = EventHotKeyID()
-                let status = GetEventParameter(
-                    event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
-                    nil, MemoryLayout<EventHotKeyID>.size, nil, &pressedID
-                )
-                guard status == noErr, pressedID.signature == ShortcutService.signature else {
-                    return OSStatus(eventNotHandledErr)
-                }
-
-                let service = Unmanaged<ShortcutService>.fromOpaque(context).takeUnretainedValue()
-                // The Carbon callback arrives on the main thread, but it is not
-                // statically known to be, so the hop is explicit.
-                MainActor.assumeIsolated { service.handler?() }
-                return noErr
-            },
-            1,
-            &eventType,
-            context,
-            &eventHandler
-        )
-
-        let hotKeyID = EventHotKeyID(signature: Self.signature, id: 1)
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: action.rawValue)
+        var hotKeyRef: EventHotKeyRef?
         let status = RegisterEventHotKey(
             UInt32(configuration.keyCode),
             configuration.carbonModifiers,
@@ -163,24 +154,86 @@ final class ShortcutService: GlobalShortcutRegistering {
             &hotKeyRef
         )
 
-        guard status == noErr else {
-            unregister()
+        guard status == noErr, let hotKeyRef else {
+            handlers[action] = nil
+            removeEventHandlerIfUnused()
             throw GlobalShortcutError.registrationFailed(status: status)
         }
+        hotKeyRefs[action] = hotKeyRef
         ClickitLog.shortcut.notice(
             "Registered global shortcut \(configuration.displayString, privacy: .public)"
         )
     }
 
-    func unregister() {
-        if let hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
+    private func installEventHandlerIfNeeded() throws {
+        guard eventHandler == nil else { return }
+
+        var eventType = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyPressed)
+        )
+        let context = Unmanaged.passUnretained(self).toOpaque()
+
+        let status = InstallEventHandler(
+            GetApplicationEventTarget(),
+            { _, event, context in
+                guard let event, let context else { return OSStatus(eventNotHandledErr) }
+
+                var pressedID = EventHotKeyID()
+                let status = GetEventParameter(
+                    event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                    nil, MemoryLayout<EventHotKeyID>.size, nil, &pressedID
+                )
+                guard status == noErr,
+                      pressedID.signature == ShortcutService.signature,
+                      let action = GlobalShortcutAction(rawValue: pressedID.id)
+                else {
+                    return OSStatus(eventNotHandledErr)
+                }
+
+                let service = Unmanaged<ShortcutService>.fromOpaque(context).takeUnretainedValue()
+                // The Carbon callback arrives on the main thread, but it is not
+                // statically known to be, so the hop is explicit.
+                MainActor.assumeIsolated { service.handlers[action]?() }
+                return noErr
+            },
+            1,
+            &eventType,
+            context,
+            &eventHandler
+        )
+        guard status == noErr else {
+            eventHandler = nil
+            throw GlobalShortcutError.registrationFailed(status: status)
         }
+    }
+
+    func unregister(_ action: GlobalShortcutAction) {
+        if let hotKeyRef = hotKeyRefs.removeValue(forKey: action) {
+            UnregisterEventHotKey(hotKeyRef)
+        }
+        handlers[action] = nil
+        removeEventHandlerIfUnused()
+    }
+
+    func unregisterAll() {
+        for hotKeyRef in hotKeyRefs.values {
+            UnregisterEventHotKey(hotKeyRef)
+        }
+        hotKeyRefs.removeAll()
+        handlers.removeAll()
+        removeEventHandler()
+    }
+
+    private func removeEventHandlerIfUnused() {
+        guard hotKeyRefs.isEmpty else { return }
+        removeEventHandler()
+    }
+
+    private func removeEventHandler() {
         if let eventHandler {
             RemoveEventHandler(eventHandler)
             self.eventHandler = nil
         }
-        handler = nil
     }
 }

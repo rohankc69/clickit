@@ -131,6 +131,108 @@ final class AppEnvironmentTests: ClickitTestCase {
         XCTAssertNotNil(environment.lastErrorMessage)
     }
 
+    // MARK: - Global shortcuts
+
+    func testStartRegistersOpenAndScreenshotShortcuts() {
+        let shortcuts = StubShortcutService()
+        environment = makeEnvironment(pasteboard: pasteboard, shortcuts: shortcuts)
+
+        environment.start()
+
+        XCTAssertEqual(shortcuts.configurations[.openClickit], .default)
+        XCTAssertEqual(shortcuts.configurations[.captureSelection], .captureSelection)
+    }
+
+    func testScreenshotShortcutStartsInteractiveClipboardCapture() {
+        let shortcuts = StubShortcutService()
+        let screenshots = StubScreenshotService()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            screenshots: screenshots
+        )
+        environment.start()
+
+        shortcuts.trigger(.captureSelection)
+
+        XCTAssertEqual(screenshots.captureCount, 1)
+    }
+
+    func testOpenShortcutStillWorksAfterScreenshotRegistration() {
+        let shortcuts = StubShortcutService()
+        environment = makeEnvironment(pasteboard: pasteboard, shortcuts: shortcuts)
+        var openCount = 0
+        environment.openPopoverRequested = { openCount += 1 }
+        environment.start()
+
+        shortcuts.trigger(.captureSelection)
+        shortcuts.trigger(.openClickit)
+
+        XCTAssertEqual(openCount, 1)
+    }
+
+    func testScreenshotRegistrationFailureDoesNotDisableOpenShortcut() {
+        struct Conflict: LocalizedError {
+            var errorDescription: String? { "shortcut conflict" }
+        }
+        let shortcuts = StubShortcutService()
+        shortcuts.registrationFailures[.captureSelection] = Conflict()
+        environment = makeEnvironment(pasteboard: pasteboard, shortcuts: shortcuts)
+        var openCount = 0
+        environment.openPopoverRequested = { openCount += 1 }
+
+        environment.start()
+        shortcuts.trigger(.openClickit)
+
+        XCTAssertEqual(openCount, 1)
+        XCTAssertNil(environment.shortcutError)
+        XCTAssertEqual(environment.screenshotShortcutError, "shortcut conflict")
+    }
+
+    func testScreenshotLaunchFailureIsSurfaced() {
+        struct LaunchFailure: LocalizedError {
+            var errorDescription: String? { "launch refused" }
+        }
+        let shortcuts = StubShortcutService()
+        let screenshots = StubScreenshotService()
+        screenshots.failure = LaunchFailure()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            screenshots: screenshots
+        )
+        environment.start()
+
+        shortcuts.trigger(.captureSelection)
+
+        XCTAssertEqual(environment.lastErrorMessage, "Could not start screenshot selection. launch refused")
+    }
+
+    func testScreenshotProcessFailureIsSurfaced() {
+        let shortcuts = StubShortcutService()
+        let screenshots = StubScreenshotService()
+        screenshots.completionFailure = "Screenshot capture failed. permission denied"
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            screenshots: screenshots
+        )
+        environment.start()
+
+        shortcuts.trigger(.captureSelection)
+
+        XCTAssertEqual(environment.lastErrorMessage, "Screenshot capture failed. permission denied")
+    }
+
+    func testStopCancelsAnActiveScreenshotSelection() {
+        let screenshots = StubScreenshotService()
+        environment = makeEnvironment(pasteboard: pasteboard, screenshots: screenshots)
+
+        environment.stop()
+
+        XCTAssertEqual(screenshots.cancelCount, 1)
+    }
+
     // MARK: - Pause
 
     func testPausingStopsTheMonitor() {
