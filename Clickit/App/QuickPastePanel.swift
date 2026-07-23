@@ -52,6 +52,7 @@ final class QuickPasteController {
 
     private var panel: QuickPastePanel?
     private var localMonitor: Any?
+    private var isPastePending = false
 
     /// The application the user was typing in when the panel opened. Recorded
     /// because showing the panel takes focus, and auto-paste has to give it
@@ -89,7 +90,9 @@ final class QuickPasteController {
     }
 
     func present() {
-        previousApplication = NSWorkspace.shared.frontmostApplication
+        if !isVisible {
+            rememberFrontmostApplication()
+        }
 
         let panel = panel ?? makePanel()
         self.panel = panel
@@ -103,6 +106,16 @@ final class QuickPasteController {
     func dismiss() {
         removeDismissMonitor()
         panel?.orderOut(nil)
+    }
+
+    func rememberFrontmostApplication() {
+        guard let frontmost = NSWorkspace.shared.frontmostApplication,
+              frontmost.bundleIdentifier != Bundle.main.bundleIdentifier
+        else {
+            previousApplication = nil
+            return
+        }
+        previousApplication = frontmost
     }
 
     private func makePanel() -> QuickPastePanel {
@@ -192,7 +205,9 @@ final class QuickPasteController {
     private func finishPaste() {
         dismiss()
 
-        guard environment.settingsStore.settings.autoPasteEnabled else { return }
+        guard environment.settingsStore.settings.autoPasteEnabled else {
+            return
+        }
         guard accessibility.isTrusted else {
             environment.reportAutoPasteUnavailable()
             return
@@ -201,11 +216,24 @@ final class QuickPasteController {
             return
         }
 
-        previousApplication.activate()
+        isPastePending = true
+        guard previousApplication.activate() else {
+            isPastePending = false
+            environment.reportPasteTargetChanged()
+            return
+        }
         let target = previousApplication.bundleIdentifier ?? "unknown"
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             guard let self else { return }
+            defer { self.isPastePending = false }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == previousApplication.processIdentifier else {
+                self.environment.reportPasteTargetChanged()
+                return
+            }
             let posted = pasteSimulator.pasteIntoFrontmostApplication()
+            if !posted {
+                self.environment.reportAutoPasteUnavailable()
+            }
             // Logged either way. "Pasted into nothing" and "never tried" look
             // identical from the outside, and only one of them is a bug here.
             ClickitLog.shortcut.notice(

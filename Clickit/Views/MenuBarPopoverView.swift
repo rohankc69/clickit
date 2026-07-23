@@ -32,6 +32,10 @@ struct MenuBarPopoverView: View {
                 Divider()
             }
             content
+            if environment.isLiveQueueActive || !environment.pasteQueue.isEmpty {
+                Divider()
+                pasteQueueBar
+            }
             if let message = environment.lastErrorMessage {
                 Divider()
                 errorBanner(message)
@@ -52,7 +56,9 @@ struct MenuBarPopoverView: View {
         }
         .onKeyPress(.upArrow) { moveSelection(by: -1) }
         .onKeyPress(.downArrow) { moveSelection(by: 1) }
-        .onKeyPress(.return) { activateSelection() }
+        .onKeyPress(keys: [.return]) { press in
+            press.modifiers.contains(.option) ? toggleQueueSelection() : activateSelection()
+        }
         .onKeyPress(.escape) { handleEscape() }
         .onKeyPress(keys: [.delete, .deleteForward]) { press in
             deleteSelection(modifiers: press.modifiers)
@@ -84,6 +90,12 @@ struct MenuBarPopoverView: View {
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused($isSearchFocused)
+                // The field consumes Return for submission before an ancestor
+                // sees it, so queueing needs to be handled at the focused view.
+                .onKeyPress(keys: [.return]) { press in
+                    guard press.modifiers.contains(.option) else { return .ignored }
+                    return toggleQueueSelection()
+                }
                 .onSubmit { _ = activateSelection() }
 
             if !searchQuery.isEmpty {
@@ -113,6 +125,7 @@ struct MenuBarPopoverView: View {
                 environment: environment,
                 selectedID: $selectedID,
                 onActivate: restore,
+                onToggleQueue: environment.togglePasteQueue,
                 onTogglePin: environment.togglePin,
                 onDelete: delete
             )
@@ -144,6 +157,64 @@ struct MenuBarPopoverView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color.orange.opacity(0.12))
+    }
+
+    private var pasteQueueBar: some View {
+        HStack(spacing: 7) {
+            liveQueueStatus
+
+            Spacer(minLength: 6)
+
+            Text(KeyboardShortcutConfiguration.toggleLiveQueue.displayString)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            if !environment.pasteQueue.isEmpty {
+                Button {
+                    environment.clearPasteQueue()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Clear paste queue")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 42)
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var liveQueueStatus: some View {
+        if environment.isLiveQueueActive {
+            Image(systemName: "record.circle.fill")
+                .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Live Queue On - \(environment.pasteQueue.count) queued")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(environment.pasteQueue.isEmpty
+                    ? "Copy normally to build the queue"
+                    : "Press Command-V to paste the next item")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Image(systemName: "rectangle.stack.fill")
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("\(environment.pasteQueue.count) queued")
+                    .font(.system(size: 11, weight: .semibold))
+                if let next = environment.nextQueuedItem {
+                    Text("Next: \(next.previewText)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
     }
 
     private var footer: some View {
@@ -224,6 +295,12 @@ struct MenuBarPopoverView: View {
             return .ignored
         }
         restore(item)
+        return .handled
+    }
+
+    private func toggleQueueSelection() -> KeyPress.Result {
+        guard let selectedItem else { return .ignored }
+        environment.togglePasteQueue(selectedItem)
         return .handled
     }
 

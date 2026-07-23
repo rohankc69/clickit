@@ -133,7 +133,7 @@ final class AppEnvironmentTests: ClickitTestCase {
 
     // MARK: - Global shortcuts
 
-    func testStartRegistersOpenAndScreenshotShortcuts() {
+    func testStartRegistersAllGlobalShortcuts() {
         let shortcuts = StubShortcutService()
         environment = makeEnvironment(pasteboard: pasteboard, shortcuts: shortcuts)
 
@@ -141,6 +141,42 @@ final class AppEnvironmentTests: ClickitTestCase {
 
         XCTAssertEqual(shortcuts.configurations[.openClickit], .default)
         XCTAssertEqual(shortcuts.configurations[.captureSelection], .captureSelection)
+        XCTAssertEqual(shortcuts.configurations[.toggleLiveQueue], .toggleLiveQueue)
+    }
+
+    func testLiveQueueShortcutTogglesWithoutOpeningPicker() {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        var openCount = 0
+        environment.openPopoverRequested = { openCount += 1 }
+        environment.start()
+
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertTrue(environment.isLiveQueueActive)
+        XCTAssertTrue(interceptor.isActive)
+        XCTAssertEqual(openCount, 0)
+
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertFalse(interceptor.isActive)
+        XCTAssertEqual(openCount, 0)
+    }
+
+    func testLiveQueueShortcutUsesOptionShiftV() {
+        let shortcut = KeyboardShortcutConfiguration.toggleLiveQueue
+
+        XCTAssertEqual(shortcut.keyCode, 0x09)
+        XCTAssertTrue(shortcut.modifierFlags.contains(.option))
+        XCTAssertTrue(shortcut.modifierFlags.contains(.shift))
+        XCTAssertFalse(shortcut.modifierFlags.contains(.command))
+        XCTAssertFalse(shortcut.modifierFlags.contains(.control))
     }
 
     func testScreenshotShortcutStartsInteractiveClipboardCapture() {
@@ -171,6 +207,40 @@ final class AppEnvironmentTests: ClickitTestCase {
         XCTAssertEqual(openCount, 1)
     }
 
+    func testOpenShortcutOnlyOpensPicker() {
+        let shortcuts = StubShortcutService()
+        environment = makeEnvironment(pasteboard: pasteboard, shortcuts: shortcuts)
+        var openCount = 0
+        environment.openPopoverRequested = { openCount += 1 }
+        environment.start()
+
+        shortcuts.trigger(.openClickit)
+
+        XCTAssertEqual(openCount, 1)
+        XCTAssertFalse(environment.isLiveQueueActive)
+    }
+
+    func testLiveQueueActivationFailureLeavesCommandVUntouched() {
+        struct Denied: LocalizedError {
+            var errorDescription: String? { "permission denied" }
+        }
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        interceptor.activationError = Denied()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertFalse(interceptor.isActive)
+        XCTAssertEqual(environment.lastErrorMessage, "permission denied")
+    }
+
     func testScreenshotRegistrationFailureDoesNotDisableOpenShortcut() {
         struct Conflict: LocalizedError {
             var errorDescription: String? { "shortcut conflict" }
@@ -187,6 +257,26 @@ final class AppEnvironmentTests: ClickitTestCase {
         XCTAssertEqual(openCount, 1)
         XCTAssertNil(environment.shortcutError)
         XCTAssertEqual(environment.screenshotShortcutError, "shortcut conflict")
+    }
+
+    func testPasteQueueRegistrationFailureDoesNotDisableOtherShortcuts() {
+        struct Conflict: LocalizedError {
+            var errorDescription: String? { "queue shortcut conflict" }
+        }
+        let shortcuts = StubShortcutService()
+        shortcuts.registrationFailures[.toggleLiveQueue] = Conflict()
+        environment = makeEnvironment(pasteboard: pasteboard, shortcuts: shortcuts)
+        var openCount = 0
+        environment.openPopoverRequested = { openCount += 1 }
+
+        environment.start()
+        shortcuts.trigger(.openClickit)
+        shortcuts.trigger(.captureSelection)
+
+        XCTAssertEqual(openCount, 1)
+        XCTAssertNil(environment.shortcutError)
+        XCTAssertNil(environment.screenshotShortcutError)
+        XCTAssertEqual(environment.liveQueueShortcutError, "queue shortcut conflict")
     }
 
     func testScreenshotLaunchFailureIsSurfaced() {
@@ -231,6 +321,221 @@ final class AppEnvironmentTests: ClickitTestCase {
         environment.stop()
 
         XCTAssertEqual(screenshots.cancelCount, 1)
+    }
+
+    func testStopDeactivatesLiveQueueCommandVMonitoring() {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        shortcuts.trigger(.toggleLiveQueue)
+
+        environment.stop()
+
+        XCTAssertFalse(interceptor.isActive)
+        XCTAssertEqual(interceptor.deactivationCount, 1)
+    }
+
+    // MARK: - Paste queue
+
+    func testCommandVPastesQueuedItemsInInsertionOrderAndStopsWhenEmpty() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        pasteboard.stage(.text("first"))
+        environment.monitor.poll()
+        let first = try XCTUnwrap(environment.items.first)
+        pasteboard.stage(.text("second"))
+        environment.monitor.poll()
+        let second = try XCTUnwrap(environment.items.first)
+
+        environment.togglePasteQueue(first)
+        environment.togglePasteQueue(second)
+
+        XCTAssertEqual(environment.queuedItems.map(\.id), [first.id, second.id])
+        XCTAssertEqual(environment.pasteQueuePosition(for: first), 1)
+        XCTAssertEqual(environment.pasteQueuePosition(for: second), 2)
+
+        shortcuts.trigger(.toggleLiveQueue)
+        XCTAssertEqual(interceptor.triggerCommandV(), true)
+        XCTAssertEqual(environment.pasteQueue, [second.id])
+        XCTAssertTrue(environment.isLiveQueueActive)
+
+        XCTAssertEqual(interceptor.triggerCommandV(), false)
+
+        XCTAssertEqual(pasteboard.writtenPayloads, [.text("first"), .text("second")])
+        XCTAssertTrue(environment.pasteQueue.isEmpty)
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertFalse(interceptor.isActive)
+    }
+
+    func testLiveQueueAppendsEveryCaptureIncludingDuplicates() throws {
+        let shortcuts = StubShortcutService()
+        environment = makeEnvironment(pasteboard: pasteboard, shortcuts: shortcuts)
+        environment.start()
+        shortcuts.trigger(.toggleLiveQueue)
+
+        pasteboard.stage(.text("repeated"))
+        environment.monitor.poll()
+        pasteboard.stage(.text("repeated"))
+        environment.monitor.poll()
+
+        let item = try XCTUnwrap(environment.items.first)
+        XCTAssertEqual(environment.items.count, 1)
+        XCTAssertEqual(environment.pasteQueue, [item.id, item.id])
+    }
+
+    func testOptionShiftVStopsLiveQueueWithoutClearingQueuedItems() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        shortcuts.trigger(.toggleLiveQueue)
+        pasteboard.stage(.text("keep queued"))
+        environment.monitor.poll()
+        let queuedID = try XCTUnwrap(environment.items.first?.id)
+
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertFalse(interceptor.isActive)
+        XCTAssertEqual(environment.pasteQueue, [queuedID])
+    }
+
+    func testCommandVWithAnEmptyQueueAutomaticallyStopsLiveQueue() {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertEqual(interceptor.triggerCommandV(), false)
+
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertFalse(interceptor.isActive)
+        XCTAssertTrue(pasteboard.writtenPayloads.isEmpty)
+    }
+
+    func testInterceptorFailureStopsLiveQueueAndKeepsRemainingItems() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        pasteboard.stage(.text("queued"))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+        environment.togglePasteQueue(item)
+        shortcuts.trigger(.toggleLiveQueue)
+
+        interceptor.triggerFailure()
+
+        XCTAssertEqual(environment.pasteQueue, [item.id])
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertNotNil(environment.lastErrorMessage)
+    }
+
+    func testTogglingAQueuedItemRemovesIt() throws {
+        pasteboard.stage(.text("only item"))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+
+        environment.togglePasteQueue(item)
+        environment.togglePasteQueue(item)
+
+        XCTAssertTrue(environment.pasteQueue.isEmpty)
+    }
+
+    func testFailedQueuedImageRestoreKeepsItQueued() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        pasteboard.stage(.image(data: Data(repeating: 0x44, count: 64)))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+        environment.togglePasteQueue(item)
+        try FileManager.default.removeItem(
+            at: imageStorage.url(forRelativePath: try XCTUnwrap(item.imagePath))
+        )
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertEqual(interceptor.triggerCommandV(), false)
+
+        XCTAssertEqual(environment.pasteQueue, [item.id])
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertTrue(pasteboard.writtenPayloads.isEmpty)
+        XCTAssertNotNil(environment.lastErrorMessage)
+    }
+
+    func testDeletingAnItemRemovesItFromTheQueue() throws {
+        pasteboard.stage(.text("delete me"))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+        environment.togglePasteQueue(item)
+
+        environment.delete(item)
+
+        XCTAssertTrue(environment.pasteQueue.isEmpty)
+    }
+
+    func testClearingHistoryKeepsOnlyQueuedPinnedItems() throws {
+        let pinned = makeTextItem("pinned", pinned: true)
+        let recent = makeTextItem("recent")
+        store.insert(pinned)
+        store.insert(recent)
+        environment.togglePasteQueue(pinned)
+        environment.togglePasteQueue(recent)
+
+        environment.clearHistory()
+
+        XCTAssertEqual(environment.pasteQueue, [pinned.id])
+    }
+
+    func testQueuedRestoreIsNotCapturedAgain() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        pasteboard.stage(.text("queued"))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+        environment.togglePasteQueue(item)
+        shortcuts.trigger(.toggleLiveQueue)
+
+        interceptor.triggerCommandV()
+        environment.monitor.poll()
+
+        XCTAssertEqual(environment.items.count, 1)
+        XCTAssertEqual(environment.captureCount, 1)
     }
 
     // MARK: - Pause

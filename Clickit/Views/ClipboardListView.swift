@@ -13,6 +13,7 @@ struct ClipboardListView: View {
     let environment: AppEnvironment
     @Binding var selectedID: UUID?
     let onActivate: (ClipboardItem) -> Void
+    let onToggleQueue: (ClipboardItem) -> Void
     let onTogglePin: (ClipboardItem) -> Void
     let onDelete: (ClipboardItem) -> Void
 
@@ -60,7 +61,9 @@ struct ClipboardListView: View {
                 environment: environment,
                 isSelected: item.id == selectedID,
                 shortcutNumber: shortcutNumber(for: item),
+                queuePosition: environment.pasteQueuePosition(for: item),
                 onActivate: { onActivate(item) },
+                onToggleQueue: { onToggleQueue(item) },
                 onTogglePin: { onTogglePin(item) },
                 onDelete: { onDelete(item) }
             )

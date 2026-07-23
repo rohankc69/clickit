@@ -1,6 +1,10 @@
 import AppKit
 import CoreGraphics
 
+enum ClickitEventMarker {
+    static let syntheticPaste: Int64 = 0x434C_4B54_5053_5445 // "CLKTPSTE"
+}
+
 /// Presses Command-V into whatever application the user came from.
 @MainActor
 protocol PasteSimulating: AnyObject {
@@ -54,6 +58,8 @@ final class PasteSimulator: PasteSimulating {
 
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
+        keyDown.setIntegerValueField(.eventSourceUserData, value: ClickitEventMarker.syntheticPaste)
+        keyUp.setIntegerValueField(.eventSourceUserData, value: ClickitEventMarker.syntheticPaste)
         keyDown.post(tap: .cgAnnotatedSessionEventTap)
         keyUp.post(tap: .cgAnnotatedSessionEventTap)
         return true

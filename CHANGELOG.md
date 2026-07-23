@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - A global Option-Shift-S shortcut that opens macOS's native area selector and copies the result directly to the clipboard; Clickit records it while monitoring is active
+- A session-only paste queue for staging history items in FIFO order and pasting the next one with Option-Shift-V, suggested by Yavuz on Product Hunt
+- A read-only Live Queue HUD stays at the top-right of the main display while recording or queued pastes remain. Its compact macOS popover treatment shows the next five entries with screenshot thumbnails and collapses additional entries into an overflow count
+
+### Changed
+
+- Option-Shift-V now exclusively toggles Live Queue, while Command-Shift-V exclusively opens Clickit. During Queue Mode, each physical Command-V pastes and removes the next item; the final item stops Queue Mode automatically. Command-V remains native and unobserved outside Queue Mode
+- Live Queue requests Accessibility and temporary Input Monitoring. Permission or event-tap failure leaves Command-V untouched and preserves remaining queue items
+
+### Fixed
+
+- Option-Return now reaches the paste-queue action while the search field is focused instead of being consumed as an ordinary submission
+- Global shortcut presses and queue-size changes are logged without clipboard contents, making registration failures distinguishable from dispatch failures
 
 ## [0.2.2] - 2026-07-21
 

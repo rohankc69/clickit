@@ -95,11 +95,13 @@ Please read these. They are the difference between what Clickit does today and w
 
 **Screen Recording permission is used only for a screenshot you request.** Pressing Option-Shift-S launches macOS's native interactive area selector and directs the selected image to the clipboard. Clickit does not record the screen continuously, and this code path does not run until you press the shortcut. Declining the permission leaves clipboard history and the macOS screenshot shortcuts working normally.
 
-**Accessibility permission is requested, and is optional.** Clickit asks for it the first time you enable automatic pasting. It uses the permission for exactly two things: reading the position of the text cursor in the frontmost application so the panel can open there, and posting a Command-V keystroke so a picked item lands where you were typing.
+**Input Monitoring is used only while Live Queue is active.** Pressing Option-Shift-V uses Accessibility authorization and Input Monitoring to install a temporary keyboard event tap, so Clickit can put the next queued payload on the clipboard before your physical Command-V reaches the current application. Clickit returns the original Command-V unchanged; it does not suppress or replace it. The event tap is removed when you press Option-Shift-V again, the queue finishes, an error occurs, or Clickit quits. It ignores all modified paste shortcuts and does not store keystrokes. Declining either permission leaves Live Queue off and Command-V unchanged.
 
-The permission grants the ability to read the contents of other applications' windows. Clickit does not do that. It reads one attribute, the selected text range of the focused element, and only at the moment you press the shortcut. Nothing read this way is stored, and no window contents are inspected. Decline the permission, or turn automatic pasting off, and neither code path runs — the panel opens at the pointer and you press Command-V yourself.
+**Accessibility permission is requested, and is optional.** Clickit uses it to read the text-cursor position, post Command-V after a picker selection, and authorize the temporary Live Queue event tap described above.
 
-The relevant code is in `CaretLocator.swift` and `PasteSimulator.swift`, both small and both behind protocols.
+The permission grants the ability to read the contents of other applications' windows. Clickit does not do that. It reads one attribute, the selected text range of the focused element, and only at the moment you press the shortcut. Nothing read this way is stored, and no window contents are inspected. Declining Accessibility permission leaves picker selection in clipboard-only mode and prevents Live Queue from starting.
+
+The relevant code is in `CaretLocator.swift`, `PasteSimulator.swift`, and `LiveQueuePasteInterceptor.swift`, all behind protocols.
 
 ## Changes to this document
 

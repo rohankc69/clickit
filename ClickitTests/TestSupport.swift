@@ -110,6 +110,52 @@ final class StubShortcutService: GlobalShortcutRegistering {
     func trigger(_ action: GlobalShortcutAction) {
         handlers[action]?()
     }
+
+}
+
+@MainActor
+final class StubLiveQueuePasteInterceptor: LiveQueuePasteIntercepting {
+    private(set) var isActive = false
+    private(set) var activationCount = 0
+    private(set) var deactivationCount = 0
+    var activationError: Error?
+
+    private var onCommandV: (@MainActor () -> Bool)?
+    private var onFailure: (@MainActor (LiveQueuePasteInterceptorError) -> Void)?
+
+    func activate(
+        onCommandV: @escaping @MainActor () -> Bool,
+        onFailure: @escaping @MainActor (LiveQueuePasteInterceptorError) -> Void
+    ) throws {
+        activationCount += 1
+        if let activationError { throw activationError }
+        self.onCommandV = onCommandV
+        self.onFailure = onFailure
+        isActive = true
+    }
+
+    func deactivate() {
+        guard isActive else { return }
+        deactivationCount += 1
+        isActive = false
+        onCommandV = nil
+        onFailure = nil
+    }
+
+    @discardableResult
+    func triggerCommandV() -> Bool? {
+        let shouldContinue = onCommandV?()
+        if shouldContinue == false {
+            deactivate()
+        }
+        return shouldContinue
+    }
+
+    func triggerFailure(_ error: LiveQueuePasteInterceptorError = .disabled) {
+        let handler = onFailure
+        deactivate()
+        handler?(error)
+    }
 }
 
 @MainActor
@@ -198,6 +244,7 @@ class ClickitTestCase: XCTestCase {
         settings: ClickitSettings = .default,
         pasteboard: MockPasteboardService = MockPasteboardService(),
         shortcuts: GlobalShortcutRegistering = StubShortcutService(),
+        liveQueuePasteInterceptor: LiveQueuePasteIntercepting = StubLiveQueuePasteInterceptor(),
         screenshots: ScreenshotCapturing = StubScreenshotService(),
         accessibility: AccessibilityAuthorizing = StubAccessibilityService(),
         loginItem: LoginItemManaging = StubLoginItemService()
@@ -208,6 +255,7 @@ class ClickitTestCase: XCTestCase {
             clipboardStore: makeStore(),
             pasteboard: pasteboard,
             shortcuts: shortcuts,
+            liveQueuePasteInterceptor: liveQueuePasteInterceptor,
             screenshots: screenshots,
             accessibility: accessibility,
             loginItem: loginItem
