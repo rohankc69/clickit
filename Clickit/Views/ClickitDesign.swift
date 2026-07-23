@@ -26,6 +26,41 @@ enum ClickitDesign {
     static let thumbnailPixelSize = Int(thumbnailSide) * 3
 }
 
+/// Measurements and placement for the read-only queue HUD. The height follows
+/// the queue up to five rows; additional entries collapse into one stack row.
+enum LiveQueueHUDLayout {
+    static let width: CGFloat = 288
+    static let screenInset: CGFloat = 18
+    static let cornerRadius: CGFloat = 12
+    static let headerHeight: CGFloat = 48
+    static let rowHeight: CGFloat = 44
+    static let emptyHeight: CGFloat = 48
+    static let overflowHeight: CGFloat = 32
+    static let maxVisibleItems = 5
+
+    static func shouldShow(isLiveQueueActive: Bool, queueCount: Int) -> Bool {
+        isLiveQueueActive || queueCount > 0
+    }
+
+    static func height(queueCount: Int) -> CGFloat {
+        let count = max(queueCount, 0)
+        let contentHeight = count == 0
+            ? emptyHeight
+            : CGFloat(min(count, maxVisibleItems)) * rowHeight
+        return headerHeight + contentHeight + (count > maxVisibleItems ? overflowHeight : 0)
+    }
+
+    static func frame(in visibleFrame: CGRect, queueCount: Int) -> CGRect {
+        let size = CGSize(width: width, height: height(queueCount: queueCount))
+        return CGRect(
+            x: visibleFrame.maxX - size.width - screenInset,
+            y: visibleFrame.maxY - size.height - screenInset,
+            width: size.width,
+            height: size.height
+        )
+    }
+}
+
 /// Live vibrancy behind the caret panel.
 ///
 /// `NSPopover` supplies its own material, so this is only used by the panel,

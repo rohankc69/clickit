@@ -34,6 +34,13 @@ struct KeyboardShortcutConfiguration: Codable, Equatable, Sendable {
         modifierFlagsRawValue: NSEvent.ModifierFlags([.option, .shift]).rawValue
     )
 
+    /// Option-Shift-V toggles Live Queue. While active, a temporary event tap
+    /// prepares queued content before passing physical Command-V through.
+    static let toggleLiveQueue = KeyboardShortcutConfiguration(
+        keyCode: 0x09,
+        modifierFlagsRawValue: NSEvent.ModifierFlags([.option, .shift]).rawValue
+    )
+
     var displayString: String {
         var result = ""
         if modifierFlags.contains(.control) { result += "⌃" }
@@ -80,6 +87,15 @@ struct KeyboardShortcutConfiguration: Codable, Equatable, Sendable {
 enum GlobalShortcutAction: UInt32, Sendable {
     case openClickit = 1
     case captureSelection = 2
+    case toggleLiveQueue = 3
+
+    var logName: String {
+        switch self {
+        case .openClickit: "open Clickit"
+        case .captureSelection: "capture selection"
+        case .toggleLiveQueue: "toggle Live Queue"
+        }
+    }
 }
 
 enum GlobalShortcutError: LocalizedError {
@@ -111,6 +127,34 @@ protocol GlobalShortcutRegistering: AnyObject {
     func unregisterAll()
 }
 
+/// Suppresses key-repeat presses until Carbon reports the matching release.
+@MainActor
+final class ShortcutGestureCoordinator {
+    private var pressedActions: Set<GlobalShortcutAction> = []
+
+    func press(
+        _ action: GlobalShortcutAction,
+        handler: @MainActor () -> Void
+    ) {
+        guard pressedActions.insert(action).inserted else { return }
+        handler()
+    }
+
+    func release(_ action: GlobalShortcutAction) {
+        pressedActions.remove(action)
+    }
+
+    func cancel(_ action: GlobalShortcutAction) {
+        release(action)
+    }
+
+    func cancelAll() {
+        for action in Array(pressedActions) {
+            release(action)
+        }
+    }
+}
+
 /// Registers a system-wide hotkey through Carbon's `RegisterEventHotKey`.
 ///
 /// Carbon is deprecated, but this remains the only public API for a global
@@ -121,9 +165,14 @@ protocol GlobalShortcutRegistering: AnyObject {
 final class ShortcutService: GlobalShortcutRegistering {
     var isSupported: Bool { true }
 
+    private struct Binding {
+        let handler: @MainActor () -> Void
+    }
+
     private var hotKeyRefs: [GlobalShortcutAction: EventHotKeyRef] = [:]
     private var eventHandler: EventHandlerRef?
-    private var handlers: [GlobalShortcutAction: @MainActor () -> Void] = [:]
+    private var bindings: [GlobalShortcutAction: Binding] = [:]
+    private let gestureCoordinator = ShortcutGestureCoordinator()
 
     /// Four-character signature identifying Clickit's hotkeys to Carbon.
     private static let signature: OSType = 0x434C_4B54  // "CLKT"
@@ -141,7 +190,7 @@ final class ShortcutService: GlobalShortcutRegistering {
 
         unregister(action)
         try installEventHandlerIfNeeded()
-        handlers[action] = handler
+        bindings[action] = Binding(handler: handler)
 
         let hotKeyID = EventHotKeyID(signature: Self.signature, id: action.rawValue)
         var hotKeyRef: EventHotKeyRef?
@@ -155,7 +204,7 @@ final class ShortcutService: GlobalShortcutRegistering {
         )
 
         guard status == noErr, let hotKeyRef else {
-            handlers[action] = nil
+            bindings[action] = nil
             removeEventHandlerIfUnused()
             throw GlobalShortcutError.registrationFailed(status: status)
         }
@@ -168,40 +217,62 @@ final class ShortcutService: GlobalShortcutRegistering {
     private func installEventHandlerIfNeeded() throws {
         guard eventHandler == nil else { return }
 
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed)
-        )
+        let eventTypes = [
+            EventTypeSpec(
+                eventClass: OSType(kEventClassKeyboard),
+                eventKind: UInt32(kEventHotKeyPressed)
+            ),
+            EventTypeSpec(
+                eventClass: OSType(kEventClassKeyboard),
+                eventKind: UInt32(kEventHotKeyReleased)
+            ),
+        ]
         let context = Unmanaged.passUnretained(self).toOpaque()
 
-        let status = InstallEventHandler(
-            GetApplicationEventTarget(),
-            { _, event, context in
-                guard let event, let context else { return OSStatus(eventNotHandledErr) }
+        let status = eventTypes.withUnsafeBufferPointer { eventTypes in
+            InstallEventHandler(
+                GetApplicationEventTarget(),
+                { _, event, context in
+                    guard let event, let context else { return OSStatus(eventNotHandledErr) }
 
-                var pressedID = EventHotKeyID()
-                let status = GetEventParameter(
-                    event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
-                    nil, MemoryLayout<EventHotKeyID>.size, nil, &pressedID
-                )
-                guard status == noErr,
-                      pressedID.signature == ShortcutService.signature,
-                      let action = GlobalShortcutAction(rawValue: pressedID.id)
-                else {
-                    return OSStatus(eventNotHandledErr)
-                }
+                    var hotKeyID = EventHotKeyID()
+                    let status = GetEventParameter(
+                        event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                        nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID
+                    )
+                    guard status == noErr,
+                          hotKeyID.signature == ShortcutService.signature,
+                          let action = GlobalShortcutAction(rawValue: hotKeyID.id)
+                    else {
+                        return OSStatus(eventNotHandledErr)
+                    }
 
-                let service = Unmanaged<ShortcutService>.fromOpaque(context).takeUnretainedValue()
-                // The Carbon callback arrives on the main thread, but it is not
-                // statically known to be, so the hop is explicit.
-                MainActor.assumeIsolated { service.handlers[action]?() }
-                return noErr
-            },
-            1,
-            &eventType,
-            context,
-            &eventHandler
-        )
+                    let service = Unmanaged<ShortcutService>.fromOpaque(context).takeUnretainedValue()
+                    // The application event target delivers on the main thread,
+                    // but Carbon does not express that in its callback type.
+                    MainActor.assumeIsolated {
+                        switch GetEventKind(event) {
+                        case UInt32(kEventHotKeyPressed):
+                            guard let binding = service.bindings[action] else { return }
+                            ClickitLog.shortcut.notice("Global shortcut pressed: \(action.logName, privacy: .public)")
+                            service.gestureCoordinator.press(
+                                action,
+                                handler: binding.handler
+                            )
+                        case UInt32(kEventHotKeyReleased):
+                            service.gestureCoordinator.release(action)
+                        default:
+                            break
+                        }
+                    }
+                    return noErr
+                },
+                eventTypes.count,
+                eventTypes.baseAddress,
+                context,
+                &eventHandler
+            )
+        }
         guard status == noErr else {
             eventHandler = nil
             throw GlobalShortcutError.registrationFailed(status: status)
@@ -209,19 +280,21 @@ final class ShortcutService: GlobalShortcutRegistering {
     }
 
     func unregister(_ action: GlobalShortcutAction) {
+        gestureCoordinator.cancel(action)
         if let hotKeyRef = hotKeyRefs.removeValue(forKey: action) {
             UnregisterEventHotKey(hotKeyRef)
         }
-        handlers[action] = nil
+        bindings[action] = nil
         removeEventHandlerIfUnused()
     }
 
     func unregisterAll() {
+        gestureCoordinator.cancelAll()
         for hotKeyRef in hotKeyRefs.values {
             UnregisterEventHotKey(hotKeyRef)
         }
         hotKeyRefs.removeAll()
-        handlers.removeAll()
+        bindings.removeAll()
         removeEventHandler()
     }
 

@@ -18,7 +18,7 @@ Don't rely on Clickit as your only copy of anything.
 | --- | --- |
 | Menu-bar popover: search, pin, delete | Signed, notarized release |
 | Text, link, image and screenshot capture | Homebrew |
-| Command-Shift-V to open; Option-Shift-S to capture | Reassignable shortcuts |
+| Command-Shift-V to open; Option-Shift-V for Live Queue | Reassignable shortcuts |
 | Launch at login | Reliable per-app exclusion |
 | Duplicate detection, retention, cleanup | |
 | History across quits, cleared on restart | |
@@ -26,8 +26,10 @@ Don't rely on Clickit as your only copy of anything.
 ## What it does
 
 - Lives in the menu bar — no Dock icon, no window to manage.
-- **Command-Shift-V** opens it at your text cursor; pick an item and it pastes right there. Command-V is never touched, so ordinary paste is unchanged everywhere.
+- **Command-Shift-V** opens it at your text cursor. It has one job and no hold behavior.
 - **Option-Shift-S** starts the native area selector and copies the screenshot to the clipboard. Clickit records it while monitoring is active.
+- Press **Option-Shift-V** to turn Live Queue on or off without opening Clickit.
+- With Live Queue on, each Command-C or Option-Shift-S capture is queued automatically, including repeated copies. A compact HUD at the top-right of the main display shows the next five entries and stacks the rest. Ordinary **Command-V** pastes the next item; the queue turns itself off after the last one.
 - Records text, links, images and screenshots, sorted by type automatically.
 - Search as you type. Pin what you want to keep; delete the rest.
 - Copy the same thing twice and the existing entry moves up instead of piling on a duplicate.
@@ -95,9 +97,11 @@ On a change, Clickit:
 
 ## Pasting
 
-Press Command-Shift-V in any app and Clickit opens at your text cursor. Pick an item and it pastes there. Command-V is never bound — ordinary paste keeps working exactly as it always has, everywhere.
+Press Command-Shift-V in any app and Clickit opens at your text cursor. Pick an item and it pastes there. This shortcut never toggles Live Queue.
 
-Two parts of this need macOS Accessibility permission: finding the cursor, and pressing Command-V for you. Clickit asks the first time you turn on automatic pasting, and works without it in a reduced form — the panel opens at the pointer instead of the cursor, the item lands on the clipboard, and you press Command-V yourself. Turn automatic pasting off in Settings and the permission is never needed.
+For repeated entry, press Option-Shift-V and keep copying normally, or stage existing history rows with their queue button or Option-Return. The read-only queue HUD stays on the main display without taking focus, shows up to five numbered entries with image previews, and stacks any overflow. While Live Queue is active, each ordinary Command-V stages the next item and then passes your original paste keystroke through unchanged. The final item turns Live Queue off automatically; Option-Shift-V can stop it manually without clearing the remaining queue. The queue holds item references in memory only and clears when Clickit quits.
+
+Picker positioning and automatic picker paste need macOS Accessibility permission. Live Queue uses that authorization plus Input Monitoring because it must stage the next queued payload before your physical Command-V reaches the current app. The monitor exists only while Live Queue is active and never suppresses or replaces Command-V.
 
 Finding the cursor depends on the app reporting it. Native text fields do; some web views and cross-platform apps don't, and Clickit then falls back to the focused window, then the pointer.
 
@@ -167,7 +171,9 @@ These work globally while Clickit is running:
 | Key | Action |
 | --- | --- |
 | Option-Shift-S | Select an area and copy the screenshot to the clipboard |
+| Option-Shift-V | Turn Live Queue on or off |
 | Command-Shift-V | Open Clickit at the text cursor |
+| Command-V | Paste the next item while Live Queue is active; paste normally otherwise |
 
 Inside the popover:
 
@@ -175,6 +181,7 @@ Inside the popover:
 | --- | --- |
 | Up / Down | Move through history |
 | Return | Restore the selected item and close |
+| Option-Return | Add or remove the selected item from the paste queue |
 | Command-1 to 9 | Restore by position |
 | Escape | Clear the search, or close if it's empty |
 | Command-F | Focus the search field |

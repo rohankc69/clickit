@@ -27,6 +27,7 @@ final class AppEnvironment {
     @ObservationIgnored private let thumbnails = ThumbnailCache()
     @ObservationIgnored private let sessionReset: SessionResetService
     @ObservationIgnored private let shortcuts: GlobalShortcutRegistering
+    @ObservationIgnored private let liveQueuePasteInterceptor: LiveQueuePasteIntercepting
     @ObservationIgnored private let screenshots: ScreenshotCapturing
     @ObservationIgnored private let accessibility: AccessibilityAuthorizing
     @ObservationIgnored private let loginItem: LoginItemManaging
@@ -218,6 +219,23 @@ final class AppEnvironment {
     /// react, and so tests can assert on it without installing a spy.
     private(set) var captureCount = 0
 
+    /// Item identifiers staged for FIFO pasting. Queue state is intentionally
+    /// session-only: history already owns the payloads, and a temporary workflow
+    /// should not extend the lifetime of sensitive clipboard data.
+    private(set) var pasteQueue: [UUID] = []
+
+    /// Live Queue is session-only. While active, every accepted clipboard
+    /// capture is appended to `pasteQueue`, including repeated content.
+    private(set) var isLiveQueueActive = false
+
+    var queuedItems: [ClipboardItem] {
+        pasteQueue.compactMap(clipboardStore.item)
+    }
+
+    var nextQueuedItem: ClipboardItem? {
+        queuedItems.first
+    }
+
     var isMonitoringPaused: Bool {
         settingsStore.settings.isMonitoringPaused
     }
@@ -232,6 +250,7 @@ final class AppEnvironment {
         clipboardStore: (any ClipboardStoring)? = nil,
         pasteboard: PasteboardServicing = PasteboardService(),
         shortcuts: GlobalShortcutRegistering = ShortcutService(),
+        liveQueuePasteInterceptor: LiveQueuePasteIntercepting = LiveQueuePasteInterceptor(),
         screenshots: ScreenshotCapturing = ScreenshotService(),
         sessionReset: SessionResetService = SessionResetService(),
         accessibility: AccessibilityAuthorizing = AccessibilityService(),
@@ -240,6 +259,7 @@ final class AppEnvironment {
         self.settingsStore = settingsStore
         self.pasteboard = pasteboard
         self.shortcuts = shortcuts
+        self.liveQueuePasteInterceptor = liveQueuePasteInterceptor
         self.screenshots = screenshots
         self.sessionReset = sessionReset
         self.accessibility = accessibility
@@ -340,11 +360,13 @@ final class AppEnvironment {
         }
         registerGlobalShortcut()
         registerScreenshotShortcut()
+        registerLiveQueueShortcut()
     }
 
     func stop() {
         monitor.stop()
         shortcuts.unregisterAll()
+        liveQueuePasteInterceptor.deactivate()
         screenshots.cancel()
     }
 
@@ -371,6 +393,10 @@ final class AppEnvironment {
     /// Kept separate so one failed binding does not make the other look broken.
     var screenshotShortcutError: String?
 
+    /// Reported independently because a queue-shortcut conflict must not make
+    /// opening Clickit or taking a screenshot look unavailable.
+    var liveQueueShortcutError: String?
+
     private func registerScreenshotShortcut() {
         guard shortcuts.isSupported else { return }
         do {
@@ -381,6 +407,19 @@ final class AppEnvironment {
         } catch {
             ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
             screenshotShortcutError = error.localizedDescription
+        }
+    }
+
+    private func registerLiveQueueShortcut() {
+        guard shortcuts.isSupported else { return }
+        do {
+            try shortcuts.register(.toggleLiveQueue, for: .toggleLiveQueue) { [weak self] in
+                self?.toggleLiveQueue()
+            }
+            liveQueueShortcutError = nil
+        } catch {
+            ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
+            liveQueueShortcutError = error.localizedDescription
         }
     }
 
@@ -414,6 +453,36 @@ final class AppEnvironment {
     /// Set by `MenuBarController`; invoked when the global shortcut fires.
     @ObservationIgnored var openPopoverRequested: (@MainActor () -> Void)?
 
+    private func toggleLiveQueue() {
+        if isLiveQueueActive {
+            isLiveQueueActive = false
+            liveQueuePasteInterceptor.deactivate()
+            ClickitLog.clipboard.notice("Live Queue disabled")
+            return
+        }
+
+        do {
+            try liveQueuePasteInterceptor.activate(
+                onCommandV: { [weak self] in
+                    self?.handleLiveQueueCommandV() ?? false
+                },
+                onFailure: { [weak self] error in
+                    guard let self else { return }
+                    self.isLiveQueueActive = false
+                    self.lastErrorMessage = error.localizedDescription
+                    ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
+                }
+            )
+            isLiveQueueActive = true
+            lastErrorMessage = nil
+            ClickitLog.clipboard.notice("Live Queue enabled")
+        } catch {
+            isLiveQueueActive = false
+            lastErrorMessage = error.localizedDescription
+            ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     /// The item is on the clipboard but Clickit could not paste it, because
     /// Accessibility access has not been granted. Saying so beats appearing to
     /// do nothing.
@@ -439,6 +508,17 @@ final class AppEnvironment {
                 discardUnusedImage(for: item)
             } else {
                 clipboardStore.insert(item)
+            }
+            let capturedItem = isDuplicate
+                ? clipboardStore.items.first(where: { $0.contentHash == item.contentHash })
+                : item
+            if isLiveQueueActive, let capturedItem {
+                // Repeated captures intentionally append the same identifier
+                // again: queue positions represent copy actions, not unique rows.
+                pasteQueue.append(capturedItem.id)
+                ClickitLog.clipboard.notice(
+                    "Live Queue appended capture; queue now has \(self.pasteQueue.count, privacy: .public) items"
+                )
             }
             // Metadata only — never the clipboard contents themselves.
             ClickitLog.clipboard.info(
@@ -504,20 +584,62 @@ final class AppEnvironment {
 
     // MARK: - Intents
 
-    /// Puts the item back on the system pasteboard. Clickit never simulates a
-    /// paste keystroke — the user presses Command-V themselves, which is why
-    /// the app needs no Accessibility permission.
-    func restore(_ item: ClipboardItem) {
+    /// Puts the item back on the system pasteboard. Focus restoration and any
+    /// optional Command-V simulation stay in `QuickPasteController`.
+    @discardableResult
+    func restore(_ item: ClipboardItem) -> Bool {
+        restoreChangeCount(for: item) != nil
+    }
+
+    private func restoreChangeCount(for item: ClipboardItem) -> Int? {
         do {
             let payload = try payload(for: item)
             let changeCount = pasteboard.write(payload)
             monitor.ignoreChange(count: changeCount)
             clipboardStore.markUsed(id: item.id, at: Date())
             lastErrorMessage = nil
+            return changeCount
         } catch {
             ClickitLog.clipboard.error("Failed to restore item: \(error.localizedDescription, privacy: .public)")
             lastErrorMessage = error.localizedDescription
+            return nil
         }
+    }
+
+    /// Stages one queued payload before the interceptor returns the user's
+    /// original Command-V to the frontmost application. Returns whether Queue
+    /// Mode should keep monitoring for another paste.
+    func handleLiveQueueCommandV() -> Bool {
+        guard isLiveQueueActive else { return false }
+        removeMissingQueuedItems()
+        guard let id = pasteQueue.first,
+              let item = clipboardStore.item(id: id)
+        else {
+            isLiveQueueActive = false
+            ClickitLog.clipboard.notice("Live Queue stopped because the queue is empty")
+            return false
+        }
+
+        guard restoreChangeCount(for: item) != nil else {
+            // Fail open: preserve the item and stop observing Command-V.
+            isLiveQueueActive = false
+            return false
+        }
+
+        pasteQueue.removeFirst()
+        removeMissingQueuedItems()
+        if pasteQueue.isEmpty {
+            isLiveQueueActive = false
+            ClickitLog.clipboard.notice("Live Queue completed")
+            return false
+        }
+        return true
+    }
+
+    /// Keeps a failed focus handoff visible and leaves the queue entry available
+    /// for retry. The item is already on the pasteboard, so no data is lost.
+    func reportPasteTargetChanged() {
+        lastErrorMessage = "Copied, but the target application changed before Clickit could paste. Try again."
     }
 
     private func payload(for item: ClipboardItem) throws -> PasteboardPayload {
@@ -546,15 +668,34 @@ final class AppEnvironment {
 
     func delete(_ item: ClipboardItem) {
         clipboardStore.delete(id: item.id)
+        pasteQueue.removeAll { $0 == item.id }
     }
 
     func togglePin(_ item: ClipboardItem) {
         clipboardStore.setPinned(!item.isPinned, id: item.id)
     }
 
+    func togglePasteQueue(_ item: ClipboardItem) {
+        if pasteQueue.contains(item.id) {
+            pasteQueue.removeAll { $0 == item.id }
+        } else if clipboardStore.item(id: item.id) != nil {
+            pasteQueue.append(item.id)
+        }
+        ClickitLog.clipboard.notice("Paste queue now has \(self.pasteQueue.count, privacy: .public) items")
+    }
+
+    func pasteQueuePosition(for item: ClipboardItem) -> Int? {
+        pasteQueue.firstIndex(of: item.id).map { $0 + 1 }
+    }
+
+    func clearPasteQueue() {
+        pasteQueue.removeAll()
+    }
+
     /// Pinned items are kept: a user who pinned something asked for it to stay.
     func clearHistory(includingPinned: Bool = false) {
         clipboardStore.deleteAll(includingPinned: includingPinned)
+        removeMissingQueuedItems()
     }
 
     func toggleMonitoring() {
@@ -573,5 +714,10 @@ final class AppEnvironment {
 
     func runCleanup(now: Date = Date()) {
         retention.runCleanup(store: clipboardStore, settings: settingsStore.settings, now: now)
+        removeMissingQueuedItems()
+    }
+
+    private func removeMissingQueuedItems() {
+        pasteQueue.removeAll { clipboardStore.item(id: $0) == nil }
     }
 }

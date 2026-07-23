@@ -190,6 +190,7 @@ private struct ShortcutsSettingsView: View {
     private let navigation: [Entry] = [
         Entry(keys: "Up, Down", action: "Move through history"),
         Entry(keys: "Return", action: "Paste the selected item"),
+        Entry(keys: "Option-Return", action: "Add or remove from paste queue"),
         Entry(keys: "Command-1 to 9", action: "Paste by position"),
         Entry(keys: "Command-F", action: "Search"),
         Entry(keys: "Escape", action: "Clear the search, or close"),
@@ -219,6 +220,14 @@ private struct ShortcutsSettingsView: View {
                     KeyCombination(KeyboardShortcutConfiguration.captureSelection.displayString)
                 }
                 if let shortcutError = environment.screenshotShortcutError {
+                    Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+                LabeledContent("Turn Live Queue on or off") {
+                    KeyCombination(KeyboardShortcutConfiguration.toggleLiveQueue.displayString)
+                }
+                if let shortcutError = environment.liveQueueShortcutError {
                     Label(shortcutError, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.orange)

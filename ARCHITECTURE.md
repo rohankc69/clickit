@@ -4,7 +4,7 @@ Describes how Clickit is put together, and why. Read it before making structural
 
 ## Guiding constraints
 
-1. **The system clipboard must keep behaving normally.** Clickit is, first, an additive observer: it never intercepts Command-C and never installs an event tap. The one exception is opt-in automatic paste, which synthesizes a Command-V keystroke into the frontmost app — behind Accessibility permission, and without ever binding Command-V itself.
+1. **The system clipboard must keep behaving normally.** Clickit never intercepts Command-C. Command-V is never registered as a hotkey or replaced: while Live Queue is active, a temporary event tap stages the next payload and returns the original physical event unchanged. Outside that explicit mode no keyboard event tap exists.
 2. **Nothing leaves the machine.** No network stack is linked, no endpoint is called.
 3. **SwiftUI views hold no persistence or system logic.** Everything system-facing sits behind a protocol so it can be replaced in tests.
 4. **No third-party dependencies.** Apple frameworks only.
@@ -263,11 +263,19 @@ Cleanup runs at launch, after every capture, and whenever retention settings cha
 
 ## Shortcut handling
 
-`ShortcutService` conforms to `GlobalShortcutRegistering`, reports `isSupported == true`, and registers system-wide hotkeys through Carbon's `RegisterEventHotKey` — the only public API for global hotkeys that does **not** require Accessibility permission. `AppEnvironment` registers each binding on launch, and a failure to claim one (another app already holds the combination) is surfaced in Settings rather than treated as fatal.
+`ShortcutService` conforms to `GlobalShortcutRegistering`, reports `isSupported == true`, and registers system-wide hotkeys through Carbon's `RegisterEventHotKey` — the only public API for global hotkeys that does **not** require Accessibility permission. Its Carbon handler listens for pressed and released events so repeated key-downs are ignored until release. `AppEnvironment` registers each binding on launch, and a failure to claim one (another app already holds the combination) is surfaced in Settings rather than treated as fatal.
 
-Bindings use the `KeyboardShortcutConfiguration` value type, stored as a virtual key code plus modifier flags rather than a character so they survive keyboard-layout changes. Command-Shift-V opens Clickit, and Option-Shift-S captures a selected area to the clipboard. They are not yet reassignable: Settings shows them read-only until the recorder UI lands (roadmap Phase 4).
+Bindings use the `KeyboardShortcutConfiguration` value type, stored as a virtual key code plus modifier flags rather than a character so they survive keyboard-layout changes. Command-Shift-V only opens Clickit, Option-Shift-S captures a selected area to the clipboard, and Option-Shift-V only toggles Live Queue. They are not yet reassignable: Settings shows them read-only until the recorder UI lands (roadmap Phase 4).
 
-The open handler fires `AppEnvironment.openPopoverRequested`, wired to `MenuBarController.showPopover`, so a shortcut press opens the same popover as a click on the menu-bar icon. The screenshot handler asks `ScreenshotService` to launch `/usr/sbin/screencapture -i -c`, using macOS's native interactive selector and directing the result to the clipboard. Screen Recording permission is checked before launch, repeated presses cannot create overlapping selectors, and shutdown cancels an active selection. When monitoring is active, the ordinary monitor records the result; the screenshot path does not bypass clipboard privacy checks or storage rules.
+The open handler fires `AppEnvironment.openPopoverRequested` immediately on key-down and has no hold action. The screenshot handler asks `ScreenshotService` to launch `/usr/sbin/screencapture -i -c`, using macOS's native interactive selector and directing the result to the clipboard. Screen Recording permission is checked before launch, repeated presses cannot create overlapping selectors, and shutdown cancels an active selection. When monitoring is active, the ordinary monitor records the result; the screenshot path does not bypass clipboard privacy checks or storage rules.
+
+## Paste queue
+
+`AppEnvironment.pasteQueue` is a FIFO list of history item identifiers. It is observable so rows can show their queue positions, but it is deliberately not persisted: the history store already owns each payload, and temporary staging should not extend the lifetime of sensitive clipboard contents. While Live Queue is active, each accepted Command-C or Option-Shift-S clipboard capture appends its identifier. Repeated content appends the same identifier again so each copy remains a distinct queue position. Deleting or expiring an item removes all of its positions from the queue.
+
+`LiveQueueHUDController` owns a read-only, nonactivating `NSPanel` anchored to the top-right of the configured main display's visible frame. It observes Live Queue and queue state without taking keyboard or mouse focus, follows display-configuration changes, and participates in every Space and full-screen app. The HUD remains visible while recording is active or queued items remain. `LiveQueueHUDView` renders at most five numbered entries, uses the shared thumbnail path for images, and represents additional entries with one overflow stack row so the surface stays bounded.
+
+Option-Shift-V activates `LiveQueuePasteInterceptor`, a session-level `CGEventTap` installed on the main run loop only for Queue Mode. For an unmodified physical Command-V directed outside Clickit, `AppEnvironment.handleLiveQueueCommandV()` synchronously writes the FIFO head to the pasteboard, suppresses recapture of that write, advances one queue position, and returns before the tap passes the exact original event onward. Synthetic picker paste events carry a marker and are ignored. The tap is removed on manual stop, the final item, an empty queue, payload failure, macOS disablement, or app shutdown. Permission or setup failure leaves Live Queue inactive and native Command-V untouched.
 
 ## Automatic paste
 
@@ -287,7 +295,8 @@ It needs Accessibility permission for two things, both behind protocols so the p
 - `Clear History` keeps pinned items by default; the Settings screen offers a separate destructive action that removes everything.
 - Unpinned history does not outlive a restart by default, which bounds how long a copied password or token can sit on disk.
 - Excluded applications are enforced in the monitor, before content reaches the store. Attribution is best-effort (`NSWorkspace.frontmostApplication`) and is marked as such in the UI, because it is a heuristic, not a guarantee of which process wrote to the pasteboard.
-- Accessibility permission is requested only when automatic pasting is enabled, and used for two things only — reading the caret position and posting Command-V. No window contents are ever read. See `CaretLocator` and `PasteSimulator`.
+- Accessibility permission is used for caret positioning, picker auto-paste, and authorization of the temporary active Live Queue event tap. No window contents are ever read. See `CaretLocator`, `PasteSimulator`, and `LiveQueuePasteInterceptor`.
+- Input Monitoring is requested only when the user turns on Live Queue. Its event tap exists only for that mode, accepts only unmodified physical Command-V outside Clickit, never changes the event, and is removed on stop, completion, failure, or shutdown. See `LiveQueuePasteInterceptor`.
 
 ## Threading
 
@@ -312,7 +321,7 @@ The project rule is that errors are neither force-unwrapped away nor silently sw
 
 ## Testing strategy
 
-134 unit tests, run with `xcodebuild test`.
+158 unit tests, run with `xcodebuild test`.
 
 The system boundary is the protocol seam. `PasteboardServicing` is mocked (`MockPasteboardService`), so capture, deduplication, self-write suppression and exclusion rules are all exercised deterministically without a window server. `ImageStoring` is *not* mocked — tests use the real service pointed at a scratch directory, so file creation and deletion behaviour is genuinely verified.
 
@@ -333,7 +342,7 @@ Coverage by area:
 | `ClipboardMonitorTests` | Change detection, self-write suppression, exclusions, pause baseline |
 | `PasteboardServiceTests` | Real-pasteboard classification, TIFF normalisation, do-not-record markers, write round-trips |
 | `SessionResetServiceTests` | Restart detection, pinned-item survival, image cleanup, opt-out, clock drift, unreadable boot time |
-| `AppEnvironmentTests` | End-to-end capture, classification, restore, duplicate file cleanup |
+| `AppEnvironmentTests` | End-to-end capture, classification, restore, paste-queue ordering and cleanup, shortcut isolation, duplicate file cleanup |
 
 Fixtures live in `ClickitTests/TestSupport.swift`. `ClickitTestCase` provides a scratch image directory and an isolated `UserDefaults` suite per test, both torn down afterwards, so the suite never touches real user data.
 

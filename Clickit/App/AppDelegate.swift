@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let accessibility: AccessibilityService
     private var menuBarController: MenuBarController?
     private var settingsWindow: SettingsWindowController?
+    private var liveQueueHUDController: LiveQueueHUDController?
 
     /// Built here rather than as default values on the properties themselves.
     /// Swift 6.0 crashes in SILGen lowering a stored-property initializer that
@@ -39,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             quickPaste: quickPaste,
             settingsWindow: settingsWindow
         )
+        liveQueueHUDController = LiveQueueHUDController(environment: environment)
         environment.start()
         ClickitLog.app.notice("Clickit launched")
     }

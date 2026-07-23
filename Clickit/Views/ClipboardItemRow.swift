@@ -11,7 +11,9 @@ struct ClipboardItemRow: View {
     /// Position in the list, when it is one of the first nine and therefore
     /// reachable with a Command-number shortcut.
     let shortcutNumber: Int?
+    let queuePosition: Int?
     let onActivate: () -> Void
+    let onToggleQueue: () -> Void
     let onTogglePin: () -> Void
     let onDelete: () -> Void
 
@@ -55,7 +57,9 @@ struct ClipboardItemRow: View {
         .onHover { isHovering = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.type.displayName): \(title)")
-        .accessibilityValue(subtitle)
+        .accessibilityValue(
+            queuePosition.map { "\(subtitle), paste queue position \($0)" } ?? subtitle
+        )
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -83,12 +87,25 @@ struct ClipboardItemRow: View {
         if isHovering || isSelected {
             HStack(spacing: 2) {
                 actionButton(
+                    systemName: queuePosition == nil ? "plus.square" : "minus.square",
+                    help: queuePosition == nil ? "Add to paste queue" : "Remove from paste queue",
+                    action: onToggleQueue
+                )
+                actionButton(
                     systemName: item.isPinned ? "pin.fill" : "pin",
                     help: item.isPinned ? "Unpin" : "Pin",
                     action: onTogglePin
                 )
                 actionButton(systemName: "trash", help: "Delete", action: onDelete)
             }
+        } else if let queuePosition {
+            Text("\(queuePosition)")
+                .font(.system(size: 10, weight: .semibold))
+                .monospacedDigit()
+                .frame(minWidth: 17, minHeight: 17)
+                .background(Circle().fill(Color.accentColor.opacity(0.16)))
+                .foregroundStyle(.tint)
+                .accessibilityLabel("Paste queue position \(queuePosition)")
         } else if item.isPinned {
             // Pinned state has to stay readable when the row is at rest.
             Image(systemName: "pin.fill")

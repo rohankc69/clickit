@@ -41,11 +41,11 @@ final class MenuBarController: NSObject {
         observeMonitoringState()
         observeCaptures()
 
-        // The shortcut opens the panel at the caret; clicking the menu-bar icon
-        // still opens the popover anchored to the icon.
+        // Command-Shift-V opens the panel at the caret; clicking the menu-bar
+        // icon still opens the popover anchored to the icon.
         environment.openPopoverRequested = { [weak self] in
             self?.closePopover()
-            self?.quickPaste.toggle()
+            self?.quickPaste.present()
         }
     }
 
@@ -160,6 +160,7 @@ final class MenuBarController: NSObject {
 
     func showPopover() {
         guard let button = statusItem.button else { return }
+        quickPaste.rememberFrontmostApplication()
         // An accessory app is not active by default; without this the popover
         // opens but the search field never receives keystrokes.
         NSApp.activate(ignoringOtherApps: true)
