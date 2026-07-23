@@ -27,7 +27,7 @@ Do not paste real clipboard contents.
 - [ ] `xcodebuild test -project Clickit.xcodeproj -scheme Clickit -destination 'platform=macOS'` passes
 - [ ] The build produces no new warnings
 - [ ] Behavioural changes are covered by tests; bug fixes include a test that failed before the fix
-- [ ] No force unwraps, force casts, or force `try`
+- [ ] No force unwraps or force `try`; any Core Foundation force cast follows a checked type ID and has a narrow lint suppression
 - [ ] No error is silently swallowed; anything caught is surfaced to the user or logged with a reason
 - [ ] No persistence, pasteboard, or file-system access was added to a SwiftUI view
 - [ ] New system integration sits behind a protocol so it can be tested
@@ -47,8 +47,9 @@ Do not paste real clipboard contents.
 
 <!--
 If this ships something partly implemented, describe the limitation precisely and
-say where it is marked in the UI and docs. Stubs must not silently succeed:
-see ShortcutService for the reference pattern. Delete this section if it does not apply.
+say where it is marked in the UI and docs. Stubs must not silently succeed; the
+read-only shortcut controls in Settings are the reference pattern. Delete this
+section if it does not apply.
 -->
 
 ## Notes for the reviewer

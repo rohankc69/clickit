@@ -28,6 +28,19 @@ final class AccessibilityStatusTests: ClickitTestCase {
         XCTAssertFalse(environment.shouldShowAccessibilityNotice)
     }
 
+    func testAutomaticPasteCapabilityRequiresBothSettingAndAccess() {
+        let accessibility = StubAccessibilityService(isTrusted: true)
+        let environment = makeEnvironment(accessibility: accessibility)
+        XCTAssertTrue(environment.canAutomaticallyPaste)
+
+        environment.settingsStore.settings.autoPasteEnabled = false
+        XCTAssertFalse(environment.canAutomaticallyPaste)
+
+        environment.settingsStore.settings.autoPasteEnabled = true
+        accessibility.isTrusted = false
+        XCTAssertFalse(environment.canAutomaticallyPaste)
+    }
+
     func testStatusIsNotGrantedBeforeAccessHasEverBeenHeld() {
         let environment = makeEnvironment(accessibility: StubAccessibilityService(isTrusted: false))
 

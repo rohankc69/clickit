@@ -55,12 +55,12 @@ Phase 1 captures images already. Phase 3 makes them pleasant to work with.
 
 ## Phase 4 — Native experience — In progress
 
-- [x] Global shortcut to open at the cursor, via `RegisterEventHotKey` (default Command-Shift-V)
+- [x] Global shortcut to open the clipboard picker on the active display, via `RegisterEventHotKey` (default Command-Shift-V)
 - [x] Global Option-Shift-S shortcut for a selected screenshot copied directly to the clipboard
 - [ ] Make the shortcut reassignable: a recorder UI in Settings with conflict detection (it is fixed and shown read-only today)
 - [ ] Layout-aware key naming via `UCKeyTranslate`
 - [x] Auto-paste after selecting an item, so Command-V is not needed. Shipped enabled by default; it uses Accessibility permission, with a first-run prompt that explains why and a clipboard-only fallback when permission is refused
-- [x] Paste queue for lining up history items and pasting them in sequence (suggested by Yavuz on Product Hunt)
+- [x] Paste queue for lining up history items, activating automatically when staged, and pasting them in sequence (suggested by Yavuz on Product Hunt)
 - [x] Launch at login (`SMAppService`)
 - [ ] Excluded-applications picker instead of typed bundle identifiers
 - [ ] More reliable source-application attribution

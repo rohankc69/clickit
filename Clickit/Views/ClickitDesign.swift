@@ -1,17 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// Shared measurements and materials for Clickit's two surfaces: the menu-bar
-/// popover and the panel shown at the text caret.
-///
-/// Both render the same view at the same size, so the numbers live here rather
-/// than being repeated in the AppKit layer where they would quietly drift apart.
+/// Shared measurements for the full menu-bar popover. The contextual picker
+/// uses `QuickPasteSurfaceLayout` because its height follows its result count.
 enum ClickitDesign {
     /// Sized for a utility popover: wide enough that a line of text is readable
     /// before it truncates, short enough to stay out of the way.
     static let surfaceSize = CGSize(width: 380, height: 460)
 
-    /// Matches the radius macOS uses for popovers, so the caret panel does not
+    /// Matches the radius macOS uses for popovers, so the quick picker does not
     /// read as a foreign window next to system UI.
     static let surfaceCornerRadius: CGFloat = 12
 
@@ -61,7 +58,7 @@ enum LiveQueueHUDLayout {
     }
 }
 
-/// Live vibrancy behind the caret panel.
+/// Live vibrancy behind the quick picker.
 ///
 /// `NSPopover` supplies its own material, so this is only used by the panel,
 /// which is a borderless window with nothing behind it. SwiftUI's `Material`

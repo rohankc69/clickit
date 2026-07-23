@@ -26,10 +26,11 @@ Don't rely on Clickit as your only copy of anything.
 ## What it does
 
 - Lives in the menu bar — no Dock icon, no window to manage.
-- **Command-Shift-V** opens it at your text cursor. It has one job and no hold behavior.
+- **Command-Shift-V** opens a compact picker on the active display. It has one job and no hold behavior.
 - **Option-Shift-S** starts the native area selector and copies the screenshot to the clipboard. Clickit records it while monitoring is active.
-- Press **Option-Shift-V** to turn Live Queue on or off without opening Clickit.
+- Press **Option-Shift-V** to start Live Queue, or press it again to stop and clear the queue without opening Clickit.
 - With Live Queue on, each Command-C or Option-Shift-S capture is queued automatically, including repeated copies. A compact HUD at the top-right of the main display shows the next five entries and stacks the rest. Ordinary **Command-V** pastes the next item; the queue turns itself off after the last one.
+- Adding a history item with its queue button or **Option-Return** starts Live Queue immediately. **Option-Shift-V** stops it and discards every remaining queued item.
 - Records text, links, images and screenshots, sorted by type automatically.
 - Search as you type. Pin what you want to keep; delete the rest.
 - Copy the same thing twice and the existing entry moves up instead of piling on a duplicate.
@@ -97,13 +98,13 @@ On a change, Clickit:
 
 ## Pasting
 
-Press Command-Shift-V in any app and Clickit opens at your text cursor. Pick an item and it pastes there. This shortcut never toggles Live Queue.
+Press Command-Shift-V in any app and a compact picker opens at the lower-right of the active display. Pick an item and it pastes there. This shortcut never toggles Live Queue.
 
-For repeated entry, press Option-Shift-V and keep copying normally, or stage existing history rows with their queue button or Option-Return. The read-only queue HUD stays on the main display without taking focus, shows up to five numbered entries with image previews, and stacks any overflow. While Live Queue is active, each ordinary Command-V stages the next item and then passes your original paste keystroke through unchanged. The final item turns Live Queue off automatically; Option-Shift-V can stop it manually without clearing the remaining queue. The queue holds item references in memory only and clears when Clickit quits.
+For repeated entry, press Option-Shift-V and keep copying normally, or stage existing history rows with their queue button or Option-Return. Staging the first history item starts Live Queue, so Command-V can paste it immediately without another enable step. The read-only queue HUD stays on the main display without taking focus, shows up to five numbered entries with image previews, and stacks any overflow. While Live Queue is active, each ordinary Command-V stages the next item and then passes your original paste keystroke through unchanged. The final item turns Live Queue off automatically. Pressing Option-Shift-V while it is active stops the session and discards every remaining item; the clear button does the same. The queue holds item references in memory only and clears when Clickit quits.
 
 Picker positioning and automatic picker paste need macOS Accessibility permission. Live Queue uses that authorization plus Input Monitoring because it must stage the next queued payload before your physical Command-V reaches the current app. The monitor exists only while Live Queue is active and never suppresses or replaces Command-V.
 
-Finding the cursor depends on the app reporting it. Native text fields do; some web views and cross-platform apps don't, and Clickit then falls back to the focused window, then the pointer.
+Finding the cursor depends on the app reporting it. Native text fields do; some web views and cross-platform apps don't, and Clickit then uses the focused control or window. Without Accessibility access, it opens on the display receiving keyboard input and falls back to the pointer only if macOS cannot identify that display.
 
 ## Local storage
 
@@ -115,7 +116,7 @@ Everything lives on your Mac:
 └── Images/          # PNG files for copied images and screenshots
 ```
 
-Text and metadata go in a local SQLite database. Image bytes are kept as separate files, with only the filename on the entry, and the list renders from small cached thumbnails — so browsing history never pages full-size screenshots into memory. The database is read in once at launch and kept as a write-through cache: search stays instant while every change commits to disk immediately. Nothing is written anywhere else.
+Text and metadata go in a local SQLite database. Image bytes are kept as separate files, with only the filename on the entry, and the list renders from small cached thumbnails — so browsing history never pages full-size screenshots into memory. The database is read in once at launch and kept as a write-through cache: search stays instant while every change commits to disk immediately. If Application Support is unavailable, Clickit logs the failure, keeps history in memory, and uses a temporary local directory for images rather than refusing to launch.
 
 ### How long history is kept
 
@@ -171,8 +172,8 @@ These work globally while Clickit is running:
 | Key | Action |
 | --- | --- |
 | Option-Shift-S | Select an area and copy the screenshot to the clipboard |
-| Option-Shift-V | Turn Live Queue on or off |
-| Command-Shift-V | Open Clickit at the text cursor |
+| Option-Shift-V | Start Live Queue, or stop and clear it while active |
+| Command-Shift-V | Open the clipboard picker on the active display |
 | Command-V | Paste the next item while Live Queue is active; paste normally otherwise |
 
 Inside the popover:
@@ -181,7 +182,7 @@ Inside the popover:
 | --- | --- |
 | Up / Down | Move through history |
 | Return | Restore the selected item and close |
-| Option-Return | Add or remove the selected item from the paste queue |
+| Option-Return | Add or remove the selected item; adding starts Live Queue |
 | Command-1 to 9 | Restore by position |
 | Escape | Clear the search, or close if it's empty |
 | Command-F | Focus the search field |
@@ -193,7 +194,7 @@ Inside the popover:
 | Command-Comma | Open Settings |
 | Command-Q | Quit Clickit |
 
-Then press **Command-V** wherever you want to paste. The global shortcuts aren't reassignable yet; Settings shows them read-only.
+Picker selection pastes automatically when Accessibility access is available. Without it, the item is copied and you press **Command-V** yourself. The global shortcuts aren't reassignable yet; Settings shows them read-only.
 
 ## Roadmap
 

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Borderless panel shown at the text caret when the global shortcut fires.
+/// Borderless panel shown on the active display when the global shortcut fires.
 ///
 /// A panel rather than the menu-bar `NSPopover`, because a popover is anchored
 /// to the view it was opened from and cannot be positioned arbitrarily on
@@ -59,14 +59,6 @@ final class QuickPasteController {
     /// back before the keystroke will land anywhere useful.
     private var previousApplication: NSRunningApplication?
 
-    private static let panelSize = NSSize(
-        width: ClickitDesign.surfaceSize.width,
-        height: ClickitDesign.surfaceSize.height
-    )
-    /// Gap between the caret and the panel, so the panel never covers the text
-    /// being edited.
-    private static let caretGap: CGFloat = 8
-
     init(
         environment: AppEnvironment,
         accessibility: AccessibilityAuthorizing,
@@ -94,10 +86,35 @@ final class QuickPasteController {
             rememberFrontmostApplication()
         }
 
-        let panel = panel ?? makePanel()
-        self.panel = panel
+        let panel: QuickPastePanel
+        let panelSize: CGSize
+        if let existing = self.panel, existing.isVisible {
+            panel = existing
+            panelSize = existing.frame.size
+        } else {
+            panelSize = QuickPasteSurfaceLayout.size(
+                itemCount: environment.items.count,
+                hasError: environment.lastErrorMessage != nil
+            )
+            panel = makePanel(size: panelSize)
+            self.panel = panel
+        }
 
-        panel.setFrame(frame(anchoredTo: caretLocator.anchorRect()), display: false)
+        let displays = NSScreen.screens.map {
+            QuickPasteDisplay(frame: $0.frame, visibleFrame: $0.visibleFrame)
+        }
+        let preferredDisplay = NSScreen.main.map {
+            QuickPasteDisplay(frame: $0.frame, visibleFrame: $0.visibleFrame)
+        }
+        panel.setFrame(
+            QuickPasteLayout.frame(
+                anchoredTo: caretLocator.anchor(),
+                panelSize: panelSize,
+                displays: displays,
+                preferredDisplay: preferredDisplay
+            ),
+            display: false
+        )
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installDismissMonitor()
@@ -118,9 +135,9 @@ final class QuickPasteController {
         previousApplication = frontmost
     }
 
-    private func makePanel() -> QuickPastePanel {
+    private func makePanel(size: CGSize) -> QuickPastePanel {
         let panel = QuickPastePanel(
-            contentRect: NSRect(origin: .zero, size: Self.panelSize)
+            contentRect: NSRect(origin: .zero, size: size)
         )
         let root = MenuBarPopoverView(
             environment: environment,
@@ -129,7 +146,9 @@ final class QuickPasteController {
                 self?.dismiss()
                 self?.openSettings()
             },
-            onActivate: { [weak self] in self?.finishPaste() }
+            onActivate: { [weak self] in self?.finishPaste() },
+            presentation: .quickPaste,
+            surfaceSize: size
         )
         // A borderless window draws nothing of its own, so the material, the
         // rounded corners and the hairline that a popover would have supplied
@@ -146,33 +165,9 @@ final class QuickPasteController {
             }
 
         let hosting = NSHostingView(rootView: decorated)
-        hosting.frame = NSRect(origin: .zero, size: Self.panelSize)
+        hosting.frame = NSRect(origin: .zero, size: size)
         panel.contentView = hosting
         return panel
-    }
-
-    /// Places the panel just below the caret, nudged back on screen when the
-    /// caret sits near an edge.
-    private func frame(anchoredTo anchor: CGRect) -> NSRect {
-        let size = Self.panelSize
-        var origin = CGPoint(
-            x: anchor.minX,
-            y: anchor.minY - size.height - Self.caretGap
-        )
-
-        let screen = NSScreen.screens.first(where: { $0.frame.contains(anchor.origin) })
-            ?? NSScreen.main
-            ?? NSScreen.screens[0]
-        let visible = screen.visibleFrame
-
-        origin.x = min(max(origin.x, visible.minX + 8), visible.maxX - size.width - 8)
-        // Not enough room underneath: flip above the caret instead of clamping
-        // to the bottom of the screen, which would cover what is being edited.
-        if origin.y < visible.minY + 8 {
-            let above = anchor.maxY + Self.caretGap
-            origin.y = above + size.height > visible.maxY ? visible.minY + 8 : above
-        }
-        return NSRect(origin: origin, size: size)
     }
 
     // MARK: - Dismissal

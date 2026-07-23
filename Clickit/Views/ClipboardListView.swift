@@ -16,6 +16,8 @@ struct ClipboardListView: View {
     let onToggleQueue: (ClipboardItem) -> Void
     let onTogglePin: (ClipboardItem) -> Void
     let onDelete: (ClipboardItem) -> Void
+    var showsActionsForSelection = true
+    var showsSectionHeaders = true
 
     private var pinned: [ClipboardItem] { items.filter(\.isPinned) }
     private var recent: [ClipboardItem] { items.filter { !$0.isPinned } }
@@ -26,7 +28,7 @@ struct ClipboardListView: View {
                 LazyVStack(alignment: .leading, spacing: 1, pinnedViews: .sectionHeaders) {
                     // Headers are only worth the vertical space once both groups
                     // exist; with one group the list is self-explanatory.
-                    if !pinned.isEmpty, !recent.isEmpty {
+                    if showsSectionHeaders, !pinned.isEmpty, !recent.isEmpty {
                         Section {
                             rows(for: pinned)
                         } header: {
@@ -65,7 +67,8 @@ struct ClipboardListView: View {
                 onActivate: { onActivate(item) },
                 onToggleQueue: { onToggleQueue(item) },
                 onTogglePin: { onTogglePin(item) },
-                onDelete: { onDelete(item) }
+                onDelete: { onDelete(item) },
+                showsActionsForSelection: showsActionsForSelection
             )
             .id(item.id)
         }

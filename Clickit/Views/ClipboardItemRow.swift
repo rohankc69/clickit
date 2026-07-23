@@ -16,6 +16,7 @@ struct ClipboardItemRow: View {
     let onToggleQueue: () -> Void
     let onTogglePin: () -> Void
     let onDelete: () -> Void
+    var showsActionsForSelection = true
 
     @State private var isHovering = false
     @Environment(\.controlActiveState) private var controlActiveState
@@ -84,11 +85,13 @@ struct ClipboardItemRow: View {
     /// keeps the row quiet at rest without hiding what it can do.
     @ViewBuilder
     private var trailingAccessory: some View {
-        if isHovering || isSelected {
+        if isHovering || (isSelected && showsActionsForSelection) {
             HStack(spacing: 2) {
                 actionButton(
                     systemName: queuePosition == nil ? "plus.square" : "minus.square",
-                    help: queuePosition == nil ? "Add to paste queue" : "Remove from paste queue",
+                    help: queuePosition == nil
+                        ? "Add to paste queue and start Live Queue"
+                        : "Remove from paste queue",
                     action: onToggleQueue
                 )
                 actionButton(

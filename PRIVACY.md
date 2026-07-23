@@ -59,7 +59,7 @@ If the Mac goes a long time without restarting, the retention rules take over: 3
 
 Settings are stored in the standard macOS preferences domain, `com.clickit.Clickit`.
 
-Nothing is written outside the Clickit Application Support directory and that preferences domain.
+If Application Support cannot be created, Clickit logs the storage failure, keeps history in memory, and stores copied images in a temporary local directory so the app can continue running. The operating system may remove those temporary files at any time.
 
 ## Logging
 
@@ -89,17 +89,17 @@ Please read these. They are the difference between what Clickit does today and w
 
 **Do-not-record markers only work if the source application sets them.** Clickit honours the `org.nspasteboard` conventions described above, but a password manager that does not mark its writes will have its copies recorded like anything else. When in doubt, pause monitoring before handling credentials.
 
-**History is not encrypted at rest.** The database and image files are readable by anything running as your user. macOS FileVault protects them at the disk level; Clickit adds no further encryption. This matters more now that history persists across restarts than it did when it lived only in memory.
+**History is not encrypted at rest.** The database and image files are readable by anything running as your user. macOS FileVault protects them at the disk level; Clickit adds no further encryption. This matters more now that history persists across Clickit relaunches than it did when it lived only in memory.
 
 **No sandbox.** Clickit is not sandboxed, because it writes to the conventional `~/Library/Application Support/` location.
 
 **Screen Recording permission is used only for a screenshot you request.** Pressing Option-Shift-S launches macOS's native interactive area selector and directs the selected image to the clipboard. Clickit does not record the screen continuously, and this code path does not run until you press the shortcut. Declining the permission leaves clipboard history and the macOS screenshot shortcuts working normally.
 
-**Input Monitoring is used only while Live Queue is active.** Pressing Option-Shift-V uses Accessibility authorization and Input Monitoring to install a temporary keyboard event tap, so Clickit can put the next queued payload on the clipboard before your physical Command-V reaches the current application. Clickit returns the original Command-V unchanged; it does not suppress or replace it. The event tap is removed when you press Option-Shift-V again, the queue finishes, an error occurs, or Clickit quits. It ignores all modified paste shortcuts and does not store keystrokes. Declining either permission leaves Live Queue off and Command-V unchanged.
+**Input Monitoring is used only while Live Queue is active.** Pressing Option-Shift-V or explicitly adding a history item to the paste queue uses Accessibility authorization and Input Monitoring to install a temporary keyboard event tap, so Clickit can put the next queued payload on the clipboard before your physical Command-V reaches the current application. Adding a history item starts Live Queue immediately. Pressing Option-Shift-V while it is active stops the event tap and clears every remaining queued item. Clickit returns the original Command-V unchanged; it does not suppress or replace it. The event tap is removed when the queue finishes or is cleared, an error occurs, or Clickit quits. It ignores all modified paste shortcuts and does not store keystrokes. Declining either permission leaves queued items intact, Live Queue off, and Command-V unchanged.
 
 **Accessibility permission is requested, and is optional.** Clickit uses it to read the text-cursor position, post Command-V after a picker selection, and authorize the temporary Live Queue event tap described above.
 
-The permission grants the ability to read the contents of other applications' windows. Clickit does not do that. It reads one attribute, the selected text range of the focused element, and only at the moment you press the shortcut. Nothing read this way is stored, and no window contents are inspected. Declining Accessibility permission leaves picker selection in clipboard-only mode and prevents Live Queue from starting.
+The permission grants the ability to read the contents of other applications' windows. Clickit does not do that. When you press the shortcut, it reads only the focused element's selection and geometry. If exact caret bounds are unavailable, it reads the focused control or window geometry so the picker stays on the correct display. Nothing read this way is stored, and no text or window contents are inspected. Declining Accessibility permission leaves picker selection in clipboard-only mode and prevents Live Queue from starting.
 
 The relevant code is in `CaretLocator.swift`, `PasteSimulator.swift`, and `LiveQueuePasteInterceptor.swift`, all behind protocols.
 

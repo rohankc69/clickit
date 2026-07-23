@@ -190,7 +190,10 @@ private struct ShortcutsSettingsView: View {
     private let navigation: [Entry] = [
         Entry(keys: "Up, Down", action: "Move through history"),
         Entry(keys: "Return", action: "Paste the selected item"),
-        Entry(keys: "Option-Return", action: "Add or remove from paste queue"),
+        Entry(
+            keys: "Option-Return",
+            action: "Add or remove from paste queue; adding starts Live Queue"
+        ),
         Entry(keys: "Command-1 to 9", action: "Paste by position"),
         Entry(keys: "Command-F", action: "Search"),
         Entry(keys: "Escape", action: "Clear the search, or close"),
@@ -208,7 +211,7 @@ private struct ShortcutsSettingsView: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("Open at the text cursor") {
+                LabeledContent("Open clipboard picker") {
                     KeyCombination(environment.settingsStore.settings.openShortcut.displayString)
                 }
                 if let shortcutError = environment.shortcutError {
@@ -224,7 +227,7 @@ private struct ShortcutsSettingsView: View {
                         .font(.callout)
                         .foregroundStyle(.orange)
                 }
-                LabeledContent("Turn Live Queue on or off") {
+                LabeledContent("Start Live Queue or stop and clear it") {
                     KeyCombination(KeyboardShortcutConfiguration.toggleLiveQueue.displayString)
                 }
                 if let shortcutError = environment.liveQueueShortcutError {

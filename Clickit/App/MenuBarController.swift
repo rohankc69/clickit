@@ -20,7 +20,7 @@ final class MenuBarController: NSObject {
     private var flashReset: DispatchWorkItem?
     private static let flashDuration: TimeInterval = 0.45
 
-    /// Shown at the text caret when the global shortcut fires, as opposed to the
+    /// Shown on the active display when the global shortcut fires, as opposed to the
     /// popover, which is anchored to the menu-bar icon.
     private let quickPaste: QuickPasteController
     private let settingsWindow: SettingsWindowController
@@ -41,7 +41,7 @@ final class MenuBarController: NSObject {
         observeMonitoringState()
         observeCaptures()
 
-        // Command-Shift-V opens the panel at the caret; clicking the menu-bar
+        // Command-Shift-V opens the quick picker; clicking the menu-bar
         // icon still opens the popover anchored to the icon.
         environment.openPopoverRequested = { [weak self] in
             self?.closePopover()

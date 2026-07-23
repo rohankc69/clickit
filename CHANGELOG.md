@@ -7,21 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-22
+
 ### Added
 
 - A global Option-Shift-S shortcut that opens macOS's native area selector and copies the result directly to the clipboard; Clickit records it while monitoring is active
-- A session-only paste queue for staging history items in FIFO order and pasting the next one with Option-Shift-V, suggested by Yavuz on Product Hunt
+- A session-only paste queue for staging history items in FIFO order and pasting the next one with Command-V, suggested by Yavuz on Product Hunt
 - A read-only Live Queue HUD stays at the top-right of the main display while recording or queued pastes remain. Its compact macOS popover treatment shows the next five entries with screenshot thumbnails and collapses additional entries into an overflow count
 
 ### Changed
 
 - Option-Shift-V now exclusively toggles Live Queue, while Command-Shift-V exclusively opens Clickit. During Queue Mode, each physical Command-V pastes and removes the next item; the final item stops Queue Mode automatically. Command-V remains native and unobserved outside Queue Mode
+- Manually adding a history item now starts Live Queue immediately. Pressing Option-Shift-V while it is active stops the session and clears every remaining item; removing or clearing the final item also stops it automatically
 - Live Queue requests Accessibility and temporary Input Monitoring. Permission or event-tap failure leaves Command-V untouched and preserves remaining queue items
+- The Command-Shift-V picker now uses a compact, content-sized surface at the lower-right of the active display, with contextual keyboard hints instead of the full application footer
 
 ### Fixed
 
 - Option-Return now reaches the paste-queue action while the search field is focused instead of being consumed as an ordinary submission
 - Global shortcut presses and queue-size changes are logged without clipboard contents, making registration failures distinguishable from dispatch failures
+- Command-Shift-V now opens on the display containing the text cursor, focused control, or active window across multi-display arrangements. When Accessibility is unavailable, it uses the display receiving keyboard input instead of following a pointer left on another screen
 
 ## [0.2.2] - 2026-07-21
 
@@ -161,7 +166,6 @@ Initial implementation, covering roadmap Phases 1 and 2.
 
 ### Known limitations
 
-- **The global shortcut is not implemented.** `ShortcutService` deliberately reports itself as unsupported and throws rather than silently doing nothing, and Settings shows the proposed Option-V binding as unavailable. Roadmap Phase 4.
 - **Excluded applications are partly implemented.** Attribution uses the frontmost application at the time of the copy, which is best-effort and not a security boundary. Roadmap Phase 4.
 - **Do-not-record markers depend on the source application** setting them; one that does not will have its copies recorded.
 - **Popover keyboard navigation has not been manually verified** across keyboard layouts.

@@ -86,7 +86,7 @@ struct LiveQueueHUDView: View {
                 ? "Waiting for copied items"
                 : "Command-V pastes the next item"
         }
-        return "Paused - Option-Shift-V to resume"
+        return "Stopped - Option-Shift-V to retry"
     }
 
     private var itemCountLabel: String {

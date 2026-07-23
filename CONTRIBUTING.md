@@ -8,7 +8,7 @@ Everyone participating is expected to follow the [Code of Conduct](CODE_OF_CONDU
 
 Read [ARCHITECTURE.md](ARCHITECTURE.md). It explains not just how the pieces fit but why several non-obvious choices were made — why AppKit for the menu bar, why polling, why the store sits behind a protocol. It will save you from proposing something that was already tried.
 
-Check [ROADMAP.md](ROADMAP.md) too, especially the "Explicitly out of scope" section. Cloud sync, telemetry, AI features and automatic paste simulation are settled decisions, not gaps.
+Check [ROADMAP.md](ROADMAP.md) too, especially the "Explicitly out of scope" section. Cloud sync, telemetry, and AI features are settled decisions, not gaps.
 
 For anything larger than a bug fix, open an issue first and describe the approach. That is much cheaper than writing a pull request that gets turned down on direction.
 
@@ -39,7 +39,7 @@ log stream --info --predicate 'subsystem == "com.clickit.Clickit"'
 
 These are enforced by review, and partly by `.swiftlint.yml`.
 
-- **No force unwrapping** (`!`), no force casts, no force `try`. Implicitly-unwrapped properties are acceptable only for initialisation-order problems, and must carry a comment saying why.
+- **No force unwrapping** (`!`) and no force `try`. Force casts are allowed only at Core Foundation boundaries after an explicit runtime type-ID check, with a comment and a narrow lint suppression. Implicitly-unwrapped properties are acceptable only for initialisation-order problems, and must carry a comment saying why.
 - **Never swallow an error.** Either surface it to the user through `AppEnvironment.lastErrorMessage`, or log it through `ClickitLog` with a comment explaining the recovery. An empty `catch` will not be merged.
 - **Keep SwiftUI views small and free of logic.** Views call intents on `AppEnvironment`. They do not touch storage, the pasteboard, or the file system.
 - **Put system integration behind a protocol.** Anything that talks to `NSPasteboard`, the file system, or the operating system needs a seam so it can be tested.

@@ -5,12 +5,19 @@ import SwiftUI
 /// Holds only view state (query, selection). Every mutation goes through
 /// `AppEnvironment`.
 struct MenuBarPopoverView: View {
+    enum Presentation {
+        case menuBar
+        case quickPaste
+    }
+
     @Bindable var environment: AppEnvironment
     let onClose: () -> Void
     let onOpenSettings: () -> Void
     /// Called after an item has been put on the clipboard. The menu-bar popover
-    /// leaves this empty; the caret panel uses it to paste for the user.
+    /// leaves this empty; the quick picker uses it to paste for the user.
     var onActivate: () -> Void = {}
+    var presentation: Presentation = .menuBar
+    var surfaceSize = ClickitDesign.surfaceSize
 
     @State private var searchQuery = ""
     @State private var selectedID: UUID?
@@ -27,12 +34,13 @@ struct MenuBarPopoverView: View {
         VStack(spacing: 0) {
             searchBar
             Divider()
-            if environment.shouldShowAccessibilityNotice {
+            if presentation == .menuBar, environment.shouldShowAccessibilityNotice {
                 AccessibilityNoticeView(environment: environment)
                 Divider()
             }
             content
-            if environment.isLiveQueueActive || !environment.pasteQueue.isEmpty {
+            if presentation == .menuBar,
+               environment.isLiveQueueActive || !environment.pasteQueue.isEmpty {
                 Divider()
                 pasteQueueBar
             }
@@ -41,9 +49,13 @@ struct MenuBarPopoverView: View {
                 errorBanner(message)
             }
             Divider()
-            footer
+            if presentation == .menuBar {
+                footer
+            } else {
+                quickPasteFooter
+            }
         }
-        .frame(width: ClickitDesign.surfaceSize.width, height: ClickitDesign.surfaceSize.height)
+        .frame(width: surfaceSize.width, height: surfaceSize.height)
         .onAppear {
             isSearchFocused = true
             selectedID = visibleItems.first?.id
@@ -127,7 +139,9 @@ struct MenuBarPopoverView: View {
                 onActivate: restore,
                 onToggleQueue: environment.togglePasteQueue,
                 onTogglePin: environment.togglePin,
-                onDelete: delete
+                onDelete: delete,
+                showsActionsForSelection: presentation == .menuBar,
+                showsSectionHeaders: presentation == .menuBar
             )
         }
     }
@@ -246,6 +260,19 @@ struct MenuBarPopoverView: View {
         .frame(height: 36)
     }
 
+    private var quickPasteFooter: some View {
+        HStack(spacing: 14) {
+            Text(environment.canAutomaticallyPaste ? "↩  Paste" : "↩  Copy")
+            Text("↑↓  Navigate")
+            Spacer()
+            Text("esc  Close")
+        }
+        .font(.system(size: 10.5))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .frame(height: QuickPasteSurfaceLayout.footerHeight)
+    }
+
     private var itemCountLabel: String {
         let count = environment.items.count
         return "\(count) item\(count == 1 ? "" : "s")"
@@ -326,6 +353,10 @@ struct MenuBarPopoverView: View {
             guard position <= items.count else { return .ignored }
             restore(items[position - 1])
             return .handled
+        }
+
+        if presentation == .quickPaste, press.characters != "f" {
+            return .ignored
         }
 
         switch press.characters {

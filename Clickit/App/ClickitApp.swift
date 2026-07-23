@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Clickit has no main window. Everything the user sees is owned by
-/// `AppDelegate`: the status item, the popover, the caret panel and the Settings
+/// `AppDelegate`: the status item, the popover, the quick picker and the Settings
 /// window.
 ///
 /// `App` requires at least one scene, so an empty `Settings` scene stands in.

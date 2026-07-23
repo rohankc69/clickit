@@ -42,11 +42,11 @@ Clickit stores what you copy. The threat model that matters most is **local**: a
 
 Especially relevant:
 
-- Clipboard contents appearing anywhere they should not — logs, crash reports, temporary files, or any path outside the Clickit Application Support directory
+- Clipboard contents appearing anywhere they should not — logs, crash reports, or paths outside the Clickit Application Support directory and its documented temporary-image fallback
 - Any network request originating from Clickit. There should be none, ever. One would be a serious bug.
-- Data surviving Clear History, Pause Monitoring, or the retention rules
+- New data being captured while monitoring is paused, or records surviving Clear History or the retention rules
 - Image files left on disk after their records are deleted
-- Privilege or permission issues, including anything that would make Clickit request or use Accessibility permission
+- Privilege or permission issues, including Accessibility, Input Monitoring, or Screen Recording use beyond the user-triggered features documented in [PRIVACY.md](PRIVACY.md)
 
 ## Known limitations, already documented
 

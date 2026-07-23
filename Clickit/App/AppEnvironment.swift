@@ -37,6 +37,10 @@ final class AppEnvironment {
     /// show the wrong state indefinitely.
     var isAccessibilityTrusted: Bool { accessibility.isTrusted }
 
+    var canAutomaticallyPaste: Bool {
+        settingsStore.settings.autoPasteEnabled && isAccessibilityTrusted
+    }
+
     func requestAccessibilityAccess() {
         accessibility.requestAccess()
     }
@@ -366,7 +370,7 @@ final class AppEnvironment {
     func stop() {
         monitor.stop()
         shortcuts.unregisterAll()
-        liveQueuePasteInterceptor.deactivate()
+        stopLiveQueue()
         screenshots.cancel()
     }
 
@@ -455,11 +459,16 @@ final class AppEnvironment {
 
     private func toggleLiveQueue() {
         if isLiveQueueActive {
-            isLiveQueueActive = false
-            liveQueuePasteInterceptor.deactivate()
-            ClickitLog.clipboard.notice("Live Queue disabled")
+            clearPasteQueue()
             return
         }
+
+        startLiveQueue()
+    }
+
+    @discardableResult
+    private func startLiveQueue() -> Bool {
+        if isLiveQueueActive, liveQueuePasteInterceptor.isActive { return true }
 
         do {
             try liveQueuePasteInterceptor.activate(
@@ -468,7 +477,7 @@ final class AppEnvironment {
                 },
                 onFailure: { [weak self] error in
                     guard let self else { return }
-                    self.isLiveQueueActive = false
+                    self.stopLiveQueue()
                     self.lastErrorMessage = error.localizedDescription
                     ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
                 }
@@ -476,10 +485,21 @@ final class AppEnvironment {
             isLiveQueueActive = true
             lastErrorMessage = nil
             ClickitLog.clipboard.notice("Live Queue enabled")
+            return true
         } catch {
-            isLiveQueueActive = false
+            stopLiveQueue()
             lastErrorMessage = error.localizedDescription
             ClickitLog.shortcut.error("\(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    private func stopLiveQueue(logMessage: String? = nil) {
+        let wasRunning = isLiveQueueActive || liveQueuePasteInterceptor.isActive
+        isLiveQueueActive = false
+        liveQueuePasteInterceptor.deactivate()
+        if wasRunning, let logMessage {
+            ClickitLog.clipboard.notice("\(logMessage, privacy: .public)")
         }
     }
 
@@ -615,22 +635,20 @@ final class AppEnvironment {
         guard let id = pasteQueue.first,
               let item = clipboardStore.item(id: id)
         else {
-            isLiveQueueActive = false
-            ClickitLog.clipboard.notice("Live Queue stopped because the queue is empty")
+            stopLiveQueue(logMessage: "Live Queue stopped because the queue is empty")
             return false
         }
 
         guard restoreChangeCount(for: item) != nil else {
             // Fail open: preserve the item and stop observing Command-V.
-            isLiveQueueActive = false
+            stopLiveQueue()
             return false
         }
 
         pasteQueue.removeFirst()
         removeMissingQueuedItems()
         if pasteQueue.isEmpty {
-            isLiveQueueActive = false
-            ClickitLog.clipboard.notice("Live Queue completed")
+            stopLiveQueue(logMessage: "Live Queue completed")
             return false
         }
         return true
@@ -667,8 +685,12 @@ final class AppEnvironment {
     }
 
     func delete(_ item: ClipboardItem) {
+        let removedQueuedItem = pasteQueue.contains(item.id)
         clipboardStore.delete(id: item.id)
         pasteQueue.removeAll { $0 == item.id }
+        if removedQueuedItem, pasteQueue.isEmpty {
+            stopLiveQueue(logMessage: "Live Queue stopped after its final item was deleted")
+        }
     }
 
     func togglePin(_ item: ClipboardItem) {
@@ -678,8 +700,12 @@ final class AppEnvironment {
     func togglePasteQueue(_ item: ClipboardItem) {
         if pasteQueue.contains(item.id) {
             pasteQueue.removeAll { $0 == item.id }
+            if pasteQueue.isEmpty {
+                stopLiveQueue(logMessage: "Live Queue stopped after its final item was removed")
+            }
         } else if clipboardStore.item(id: item.id) != nil {
             pasteQueue.append(item.id)
+            startLiveQueue()
         }
         ClickitLog.clipboard.notice("Paste queue now has \(self.pasteQueue.count, privacy: .public) items")
     }
@@ -690,12 +716,17 @@ final class AppEnvironment {
 
     func clearPasteQueue() {
         pasteQueue.removeAll()
+        stopLiveQueue(logMessage: "Live Queue stopped and cleared")
     }
 
     /// Pinned items are kept: a user who pinned something asked for it to stay.
     func clearHistory(includingPinned: Bool = false) {
+        let hadQueuedItems = !pasteQueue.isEmpty
         clipboardStore.deleteAll(includingPinned: includingPinned)
         removeMissingQueuedItems()
+        if hadQueuedItems, pasteQueue.isEmpty {
+            stopLiveQueue(logMessage: "Live Queue stopped after its final item was cleared")
+        }
     }
 
     func toggleMonitoring() {
@@ -713,8 +744,12 @@ final class AppEnvironment {
     }
 
     func runCleanup(now: Date = Date()) {
+        let hadQueuedItems = !pasteQueue.isEmpty
         retention.runCleanup(store: clipboardStore, settings: settingsStore.settings, now: now)
         removeMissingQueuedItems()
+        if hadQueuedItems, pasteQueue.isEmpty {
+            stopLiveQueue(logMessage: "Live Queue stopped after its final item expired")
+        }
     }
 
     private func removeMissingQueuedItems() {
