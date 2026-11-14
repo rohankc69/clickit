@@ -192,7 +192,7 @@ private struct ShortcutsSettingsView: View {
         Entry(keys: "Return", action: "Paste the selected item"),
         Entry(
             keys: "Option-Return",
-            action: "Add or remove from paste queue; adding starts Live Queue"
+            action: "Add to, or remove one copy from, the paste queue; adding starts Live Queue"
         ),
         Entry(keys: "Command-1 to 9", action: "Paste by position"),
         Entry(keys: "Command-F", action: "Search"),
@@ -227,7 +227,7 @@ private struct ShortcutsSettingsView: View {
                         .font(.callout)
                         .foregroundStyle(.orange)
                 }
-                LabeledContent("Start Live Queue or stop and clear it") {
+                LabeledContent("Pause or resume Live Queue") {
                     KeyCombination(KeyboardShortcutConfiguration.toggleLiveQueue.displayString)
                 }
                 if let shortcutError = environment.liveQueueShortcutError {
@@ -266,7 +266,7 @@ private struct HistorySettingsView: View {
 
     var body: some View {
         Form {
-            Section("Limits") {
+            Section {
                 Stepper(
                     "Keep at most \(settings.maxItems) items",
                     value: binding(\.maxItems),
@@ -279,6 +279,15 @@ private struct HistorySettingsView: View {
                     in: 50...5_000,
                     step: 50
                 )
+                Stepper(
+                    "Skip copies larger than \(settings.maxItemBytes / FileSizeFormatter.megabyte) MB",
+                    value: maxItemMegabytesBinding,
+                    in: 1...250
+                )
+            } header: {
+                Text("Limits")
+            } footer: {
+                Caption("Oversized copies are skipped and reported in the popover.")
             }
 
             Section {
@@ -359,6 +368,15 @@ private struct HistorySettingsView: View {
                 environment.settingsStore.settings.maxStorageBytes = FileSizeFormatter.megabytes(newValue)
                 environment.settingsChanged()
             }
+        )
+    }
+
+    /// Only affects future captures, so it does not need to restart the monitor
+    /// or run cleanup the way storage and retention changes do.
+    private var maxItemMegabytesBinding: Binding<Int> {
+        Binding(
+            get: { max(1, settings.maxItemBytes / FileSizeFormatter.megabyte) },
+            set: { environment.settingsStore.settings.maxItemBytes = FileSizeFormatter.megabytes($0) }
         )
     }
 }

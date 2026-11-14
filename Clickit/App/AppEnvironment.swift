@@ -2,6 +2,21 @@ import AppKit
 import Foundation
 import Observation
 
+/// One position in the paste queue.
+///
+/// The queue stores entries rather than bare item identifiers so that copying
+/// the same item twice produces two independently removable and reorderable
+/// positions. `itemID` is the history row; `id` identifies this copy.
+struct PasteQueueEntry: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let itemID: UUID
+
+    init(itemID: UUID, id: UUID = UUID()) {
+        self.id = id
+        self.itemID = itemID
+    }
+}
+
 /// Composition root and the single object the popover talks to.
 ///
 /// Views never reach for a service directly; they call intents here. That keeps
@@ -223,21 +238,42 @@ final class AppEnvironment {
     /// react, and so tests can assert on it without installing a spy.
     private(set) var captureCount = 0
 
-    /// Item identifiers staged for FIFO pasting. Queue state is intentionally
+    /// Positions staged for FIFO pasting. Queue state is intentionally
     /// session-only: history already owns the payloads, and a temporary workflow
     /// should not extend the lifetime of sensitive clipboard data.
-    private(set) var pasteQueue: [UUID] = []
+    private(set) var pasteQueue: [PasteQueueEntry] = []
+
+    /// Live Queue can stay on for hours, so the queue has a bound. Reaching it
+    /// is reported rather than silently dropping a copy the HUD promised to
+    /// keep.
+    static let pasteQueueLimit = 100
+
+    /// Kept internal so the exact wording can be asserted in tests.
+    static let pasteQueueFullMessage = "Paste queue is full. Paste or remove an item before adding more."
+
+    /// Payloads for the next queue positions, loaded before the event tap runs.
+    ///
+    /// The tap callback has to return quickly or macOS disables it, so image
+    /// bytes are read here instead. A two-position window is enough to cover
+    /// the head and the item after it without keeping a queue of full-size
+    /// screenshots in memory.
+    @ObservationIgnored private var preparedPayloads: [UUID: PasteboardPayload] = [:]
+    private static let preparedPayloadWindow = 2
 
     /// Live Queue is session-only. While active, every accepted clipboard
     /// capture is appended to `pasteQueue`, including repeated content.
     private(set) var isLiveQueueActive = false
 
     var queuedItems: [ClipboardItem] {
-        pasteQueue.compactMap(clipboardStore.item)
+        pasteQueue.compactMap { clipboardStore.item(id: $0.itemID) }
     }
 
     var nextQueuedItem: ClipboardItem? {
         queuedItems.first
+    }
+
+    func item(forQueueEntry entry: PasteQueueEntry) -> ClipboardItem? {
+        clipboardStore.item(id: entry.itemID)
     }
 
     var isMonitoringPaused: Bool {
@@ -457,13 +493,19 @@ final class AppEnvironment {
     /// Set by `MenuBarController`; invoked when the global shortcut fires.
     @ObservationIgnored var openPopoverRequested: (@MainActor () -> Void)?
 
-    private func toggleLiveQueue() {
-        if isLiveQueueActive {
-            clearPasteQueue()
-            return
+    /// Option-Shift-V pauses an active session and keeps its positions, or
+    /// resumes a paused one. Clearing is a separate, deliberate action.
+    func toggleLiveQueue() {
+        if isLiveQueueActive || liveQueuePasteInterceptor.isActive {
+            pauseLiveQueue()
+        } else {
+            startLiveQueue()
         }
+    }
 
-        startLiveQueue()
+    func pauseLiveQueue() {
+        guard isLiveQueueActive || liveQueuePasteInterceptor.isActive else { return }
+        stopLiveQueue(logMessage: "Live Queue paused")
     }
 
     @discardableResult
@@ -483,6 +525,9 @@ final class AppEnvironment {
                 }
             )
             isLiveQueueActive = true
+            // Covers a retry after a permission or tap failure, when the queue
+            // was staged but no payloads could be prepared yet.
+            refreshPreparedPayloads()
             lastErrorMessage = nil
             ClickitLog.clipboard.notice("Live Queue enabled")
             return true
@@ -497,6 +542,7 @@ final class AppEnvironment {
     private func stopLiveQueue(logMessage: String? = nil) {
         let wasRunning = isLiveQueueActive || liveQueuePasteInterceptor.isActive
         isLiveQueueActive = false
+        preparedPayloads.removeAll()
         liveQueuePasteInterceptor.deactivate()
         if wasRunning, let logMessage {
             ClickitLog.clipboard.notice("\(logMessage, privacy: .public)")
@@ -516,6 +562,21 @@ final class AppEnvironment {
     // MARK: - Capture
 
     private func handle(_ captured: CapturedClipboardContent) {
+        let byteSize = Self.byteSize(of: captured.payload)
+        let limit = settingsStore.settings.maxItemBytes
+        guard byteSize <= limit else {
+            let skippedSize = FileSizeFormatter.string(fromByteCount: byteSize)
+            let maximumSize = FileSizeFormatter.string(fromByteCount: limit)
+            ClickitLog.clipboard.notice(
+                "Skipped an oversized capture of \(byteSize, privacy: .public) bytes (limit \(limit, privacy: .public))"
+            )
+            lastErrorMessage = """
+                Skipped a \(skippedSize) copy. The maximum item size is \(maximumSize); \
+                change it in Settings > History.
+                """
+            return
+        }
+
         do {
             let item = try makeItem(from: captured)
             let isDuplicate = clipboardStore.promoteDuplicate(
@@ -532,13 +593,17 @@ final class AppEnvironment {
             let capturedItem = isDuplicate
                 ? clipboardStore.items.first(where: { $0.contentHash == item.contentHash })
                 : item
+            var reachedQueueLimit = false
             if isLiveQueueActive, let capturedItem {
-                // Repeated captures intentionally append the same identifier
-                // again: queue positions represent copy actions, not unique rows.
-                pasteQueue.append(capturedItem.id)
-                ClickitLog.clipboard.notice(
-                    "Live Queue appended capture; queue now has \(self.pasteQueue.count, privacy: .public) items"
-                )
+                // Repeated captures intentionally append another position:
+                // queue entries represent copy actions, not unique rows.
+                if appendToPasteQueue(capturedItem.id) {
+                    ClickitLog.clipboard.notice(
+                        "Live Queue appended capture; queue now has \(self.pasteQueue.count, privacy: .public) items"
+                    )
+                } else {
+                    reachedQueueLimit = true
+                }
             }
             // Metadata only — never the clipboard contents themselves.
             ClickitLog.clipboard.info(
@@ -549,11 +614,26 @@ final class AppEnvironment {
                 """
             )
             lastErrorMessage = nil
+            if reachedQueueLimit {
+                lastErrorMessage = Self.pasteQueueFullMessage
+            }
             captureCount += 1
             runCleanup(now: captured.capturedAt)
         } catch {
             ClickitLog.clipboard.error("Failed to capture clipboard content: \(error.localizedDescription, privacy: .public)")
             lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// The size that would be charged to the store for this payload.
+    ///
+    /// Text and URLs are measured in UTF-8 bytes to match `ClipboardItem.byteSize`
+    /// and the retention budget; images use their encoded byte count.
+    private static func byteSize(of payload: PasteboardPayload) -> Int {
+        switch payload {
+        case .text(let string): string.utf8.count
+        case .url(let url): url.absoluteString.utf8.count
+        case .image(let data): data.count
         }
     }
 
@@ -611,9 +691,17 @@ final class AppEnvironment {
         restoreChangeCount(for: item) != nil
     }
 
-    private func restoreChangeCount(for item: ClipboardItem) -> Int? {
+    private func restoreChangeCount(
+        for item: ClipboardItem,
+        preparedPayload: PasteboardPayload? = nil
+    ) -> Int? {
         do {
-            let payload = try payload(for: item)
+            let payload: PasteboardPayload
+            if let preparedPayload {
+                payload = preparedPayload
+            } else {
+                payload = try payload(for: item)
+            }
             let changeCount = pasteboard.write(payload)
             monitor.ignoreChange(count: changeCount)
             clipboardStore.markUsed(id: item.id, at: Date())
@@ -631,27 +719,59 @@ final class AppEnvironment {
     /// Mode should keep monitoring for another paste.
     func handleLiveQueueCommandV() -> Bool {
         guard isLiveQueueActive else { return false }
-        removeMissingQueuedItems()
-        guard let id = pasteQueue.first,
-              let item = clipboardStore.item(id: id)
-        else {
-            stopLiveQueue(logMessage: "Live Queue stopped because the queue is empty")
+        guard advanceQueueHead(completionMessage: "Live Queue completed") != nil else {
             return false
         }
+        return isLiveQueueActive
+    }
 
-        guard restoreChangeCount(for: item) != nil else {
+    /// Writes the next queued item to the pasteboard and advances the queue.
+    ///
+    /// This is the manual fallback when Command-V monitoring is unavailable,
+    /// and what the HUD's Paste Next control calls. It works while Live Queue
+    /// is paused as well as active.
+    @discardableResult
+    func advancePasteQueue() -> ClipboardItem? {
+        advanceQueueHead(completionMessage: "Live Queue completed")
+    }
+
+    /// Writes the head of the queue to the pasteboard and removes that position.
+    /// Returns the item that was written, or `nil` when there was nothing to
+    /// advance or the write failed.
+    private func advanceQueueHead(completionMessage: String) -> ClipboardItem? {
+        removeMissingQueuedItems()
+        guard let entry = pasteQueue.first,
+              let item = clipboardStore.item(id: entry.itemID)
+        else {
+            if isLiveQueueActive {
+                stopLiveQueue(logMessage: "Live Queue stopped because the queue is empty")
+            }
+            return nil
+        }
+
+        guard restoreChangeCount(for: item, preparedPayload: preparedPayloads[item.id]) != nil else {
             // Fail open: preserve the item and stop observing Command-V.
-            stopLiveQueue()
-            return false
+            if isLiveQueueActive {
+                stopLiveQueue()
+            }
+            return nil
         }
 
         pasteQueue.removeFirst()
         removeMissingQueuedItems()
         if pasteQueue.isEmpty {
-            stopLiveQueue(logMessage: "Live Queue completed")
-            return false
+            if isLiveQueueActive {
+                stopLiveQueue(logMessage: completionMessage)
+            }
+        } else {
+            // Loading the next image must happen after this event-tap callback
+            // returns, not inside it, or macOS may disable the tap for taking
+            // too long.
+            Task { @MainActor [weak self] in
+                self?.refreshPreparedPayloads()
+            }
         }
-        return true
+        return item
     }
 
     /// Keeps a failed focus handoff visible and leaves the queue entry available
@@ -685,11 +805,15 @@ final class AppEnvironment {
     }
 
     func delete(_ item: ClipboardItem) {
-        let removedQueuedItem = pasteQueue.contains(item.id)
+        let removedQueuedItem = pasteQueue.contains { $0.itemID == item.id }
         clipboardStore.delete(id: item.id)
-        pasteQueue.removeAll { $0 == item.id }
-        if removedQueuedItem, pasteQueue.isEmpty {
-            stopLiveQueue(logMessage: "Live Queue stopped after its final item was deleted")
+        pasteQueue.removeAll { $0.itemID == item.id }
+        if removedQueuedItem {
+            if pasteQueue.isEmpty {
+                stopLiveQueue(logMessage: "Live Queue stopped after its final item was deleted")
+            } else {
+                refreshPreparedPayloads()
+            }
         }
     }
 
@@ -698,20 +822,65 @@ final class AppEnvironment {
     }
 
     func togglePasteQueue(_ item: ClipboardItem) {
-        if pasteQueue.contains(item.id) {
-            pasteQueue.removeAll { $0 == item.id }
+        if let index = pasteQueue.firstIndex(where: { $0.itemID == item.id }) {
+            // Remove one position rather than every copy, so repeated captures
+            // of the same content stay independently controllable.
+            pasteQueue.remove(at: index)
             if pasteQueue.isEmpty {
                 stopLiveQueue(logMessage: "Live Queue stopped after its final item was removed")
+            } else {
+                refreshPreparedPayloads()
             }
         } else if clipboardStore.item(id: item.id) != nil {
-            pasteQueue.append(item.id)
-            startLiveQueue()
+            if appendToPasteQueue(item.id) {
+                startLiveQueue()
+            } else {
+                lastErrorMessage = Self.pasteQueueFullMessage
+            }
         }
         ClickitLog.clipboard.notice("Paste queue now has \(self.pasteQueue.count, privacy: .public) items")
     }
 
+    /// Removes one specific queue position, identified by its entry ID.
+    func removeQueuedEntry(id: UUID) {
+        guard let index = pasteQueue.firstIndex(where: { $0.id == id }) else { return }
+        pasteQueue.remove(at: index)
+        if pasteQueue.isEmpty {
+            stopLiveQueue(logMessage: "Live Queue stopped after its final item was removed")
+        } else {
+            refreshPreparedPayloads()
+        }
+        ClickitLog.clipboard.notice("Paste queue now has \(self.pasteQueue.count, privacy: .public) items")
+    }
+
+    /// Moves an existing position to the front, making it the next paste.
+    func moveQueuedEntryToFront(id: UUID) {
+        guard let index = pasteQueue.firstIndex(where: { $0.id == id }), index > 0 else { return }
+        let entry = pasteQueue.remove(at: index)
+        pasteQueue.insert(entry, at: 0)
+        refreshPreparedPayloads()
+        ClickitLog.clipboard.notice("Paste queue reordered")
+    }
+
+    /// Appends one position and prepares its payload while outside the tap.
+    ///
+    /// Returns `false` at the session limit so the caller can report it instead
+    /// of silently losing a copy.
+    @discardableResult
+    private func appendToPasteQueue(_ id: UUID) -> Bool {
+        guard pasteQueue.count < Self.pasteQueueLimit else {
+            ClickitLog.clipboard.notice(
+                "Live Queue is full at \(Self.pasteQueueLimit, privacy: .public) items; capture not queued"
+            )
+            return false
+        }
+        pasteQueue.append(PasteQueueEntry(itemID: id))
+        refreshPreparedPayloads()
+        return true
+    }
+
     func pasteQueuePosition(for item: ClipboardItem) -> Int? {
-        pasteQueue.firstIndex(of: item.id).map { $0 + 1 }
+        pasteQueue.firstIndex(where: { $0.itemID == item.id }).map { $0 + 1 }
     }
 
     func clearPasteQueue() {
@@ -726,6 +895,8 @@ final class AppEnvironment {
         removeMissingQueuedItems()
         if hadQueuedItems, pasteQueue.isEmpty {
             stopLiveQueue(logMessage: "Live Queue stopped after its final item was cleared")
+        } else {
+            refreshPreparedPayloads()
         }
     }
 
@@ -749,10 +920,37 @@ final class AppEnvironment {
         removeMissingQueuedItems()
         if hadQueuedItems, pasteQueue.isEmpty {
             stopLiveQueue(logMessage: "Live Queue stopped after its final item expired")
+        } else {
+            refreshPreparedPayloads()
         }
     }
 
     private func removeMissingQueuedItems() {
-        pasteQueue.removeAll { clipboardStore.item(id: $0) == nil }
+        pasteQueue.removeAll { clipboardStore.item(id: $0.itemID) == nil }
+        let queued = Set(pasteQueue.map(\.itemID))
+        preparedPayloads = preparedPayloads.filter { queued.contains($0.key) }
+    }
+
+    /// Loads the payloads the tap will need next.
+    ///
+    /// Called only outside `handleLiveQueueCommandV()`; the tap callback writes
+    /// the cache rather than touching the disk itself.
+    private func refreshPreparedPayloads() {
+        let upcoming = Array(pasteQueue.prefix(Self.preparedPayloadWindow).map(\.itemID))
+        let wanted = Set(upcoming)
+        preparedPayloads = preparedPayloads.filter { wanted.contains($0.key) }
+
+        for id in upcoming where preparedPayloads[id] == nil {
+            guard let item = clipboardStore.item(id: id) else { continue }
+            do {
+                preparedPayloads[id] = try payload(for: item)
+            } catch {
+                // Prefetching is an optimisation. If the item is reached, the
+                // paste path retries and reports the real failure.
+                ClickitLog.storage.error(
+                    "Could not prepare a queued item for paste: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
     }
 }

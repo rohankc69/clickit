@@ -28,11 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settingsWindow = SettingsWindowController(environment: environment)
         self.settingsWindow = settingsWindow
 
+        let pasteSimulator = PasteSimulator(accessibility: accessibility)
         let quickPaste = QuickPasteController(
             environment: environment,
             accessibility: accessibility,
             caretLocator: CaretLocator(accessibility: accessibility),
-            pasteSimulator: PasteSimulator(accessibility: accessibility),
+            pasteSimulator: pasteSimulator,
             openSettings: { settingsWindow.show() }
         )
         menuBarController = MenuBarController(
@@ -40,7 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             quickPaste: quickPaste,
             settingsWindow: settingsWindow
         )
-        liveQueueHUDController = LiveQueueHUDController(environment: environment)
+        liveQueueHUDController = LiveQueueHUDController(
+            environment: environment,
+            pasteSimulator: pasteSimulator,
+            accessibility: accessibility
+        )
         environment.start()
         ClickitLog.app.notice("Clickit launched")
     }

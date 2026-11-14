@@ -23,7 +23,7 @@ enum ClickitDesign {
     static let thumbnailPixelSize = Int(thumbnailSide) * 3
 }
 
-/// Measurements and placement for the read-only queue HUD. The height follows
+/// Measurements and placement for the queue HUD. The height follows
 /// the queue up to five rows; additional entries collapse into one stack row.
 enum LiveQueueHUDLayout {
     static let width: CGFloat = 288

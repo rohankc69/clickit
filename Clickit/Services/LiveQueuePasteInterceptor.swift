@@ -11,7 +11,9 @@ enum LiveQueuePasteInterceptorError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .permissionDenied:
-            "Live Queue needs Accessibility and Input Monitoring to prepare queued items before your normal Command-V. Enable Clickit in Privacy & Security, then relaunch it."
+            "Live Queue needs Accessibility and Input Monitoring to prepare queued items before your normal Command-V. "
+                + "Enable Clickit in Privacy & Security, then relaunch it. "
+                + "You can still copy queued items from the queue controls."
         case .unavailable:
             "Live Queue could not start keyboard monitoring. Command-V was not changed."
         case .disabled:
@@ -119,7 +121,7 @@ final class LiveQueuePasteInterceptor: LiveQueuePasteIntercepting {
             }
         }
 
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+        if Self.isTapDisabled(type: type) {
             let failure = onFailure
             deactivate()
             failure?(.disabled)
@@ -135,9 +137,19 @@ final class LiveQueuePasteInterceptor: LiveQueuePasteIntercepting {
         }
     }
 
+    /// macOS disables a tap that takes too long or when the user changes input
+    /// monitoring. Either way the session has to stop rather than keep a queue
+    /// that can no longer be advanced.
+    static func isTapDisabled(type: CGEventType) -> Bool {
+        type == .tapDisabledByTimeout || type == .tapDisabledByUserInput
+    }
+
     static func isPhysicalCommandV(type: CGEventType, event: CGEvent) -> Bool {
         guard type == .keyDown,
-              event.getIntegerValueField(.keyboardEventKeycode) == 0x09,
+              event.getIntegerValueField(.keyboardEventKeycode)
+                == Int64(KeyboardShortcutConfiguration.virtualKeyV),
+              // Holding Command-V must paste one item, not drain the queue.
+              event.getIntegerValueField(.keyboardEventAutorepeat) == 0,
               event.getIntegerValueField(.eventSourceUserData) != ClickitEventMarker.syntheticPaste
         else { return false }
 

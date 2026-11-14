@@ -1,12 +1,16 @@
 import SwiftUI
 
 /// Persistent queue progress shown on the main display while recording or
-/// sequential pasting is in progress.
+/// sequential pasting is in progress. The header and hover controls make the
+/// HUD usable as a fallback when Command-V monitoring is unavailable.
 struct LiveQueueHUDView: View {
     @Bindable var environment: AppEnvironment
+    let onPasteNext: () -> Void
 
-    private var visibleItems: [ClipboardItem] {
-        Array(environment.queuedItems.prefix(LiveQueueHUDLayout.maxVisibleItems))
+    @State private var hoveredEntryID: UUID?
+
+    private var visibleEntries: [PasteQueueEntry] {
+        Array(environment.pasteQueue.prefix(LiveQueueHUDLayout.maxVisibleItems))
     }
 
     private var overflowCount: Int {
@@ -17,7 +21,7 @@ struct LiveQueueHUDView: View {
         VStack(spacing: 0) {
             header
                 .overlay(alignment: .bottom) { Divider() }
-            if visibleItems.isEmpty {
+            if visibleEntries.isEmpty {
                 emptyState
             } else {
                 queueRows
@@ -67,13 +71,30 @@ struct LiveQueueHUDView: View {
                     .lineLimit(1)
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
 
-            if !environment.pasteQueue.isEmpty {
-                Text(itemCountLabel)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("\(environment.pasteQueue.count) queued")
+            HStack(spacing: 2) {
+                queueControl(
+                    systemName: environment.isLiveQueueActive ? "pause.fill" : "play.fill",
+                    help: environment.isLiveQueueActive ? "Pause Live Queue" : "Resume Live Queue"
+                ) {
+                    environment.toggleLiveQueue()
+                }
+
+                if !environment.pasteQueue.isEmpty {
+                    queueControl(
+                        systemName: "doc.on.clipboard",
+                        help: "Paste or copy the next queued item"
+                    ) {
+                        onPasteNext()
+                    }
+                    queueControl(
+                        systemName: "xmark.circle.fill",
+                        help: "Clear paste queue"
+                    ) {
+                        environment.clearPasteQueue()
+                    }
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -84,28 +105,50 @@ struct LiveQueueHUDView: View {
         if environment.isLiveQueueActive {
             return environment.pasteQueue.isEmpty
                 ? "Waiting for copied items"
-                : "Command-V pastes the next item"
+                : "\(environment.pasteQueue.count) queued - Command-V pastes next"
         }
-        return "Stopped - Option-Shift-V to retry"
+        return environment.pasteQueue.isEmpty
+            ? "Paused"
+            : "Paused - \(environment.pasteQueue.count) queued - Option-Shift-V resumes"
     }
 
-    private var itemCountLabel: String {
-        "\(environment.pasteQueue.count) item\(environment.pasteQueue.count == 1 ? "" : "s")"
+    private func queueControl(
+        systemName: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .medium))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help(help)
     }
 
     private var queueRows: some View {
-        ForEach(Array(visibleItems.enumerated()), id: \.offset) { index, item in
-            queueRow(item, position: index + 1)
-                .overlay(alignment: .bottom) {
-                    if index < visibleItems.count - 1 {
-                        Divider().padding(.leading, 54)
+        ForEach(Array(visibleEntries.enumerated()), id: \.element.id) { index, entry in
+            if let item = environment.item(forQueueEntry: entry) {
+                queueRow(entry: entry, item: item, position: index + 1)
+                    .overlay(alignment: .bottom) {
+                        if index < visibleEntries.count - 1 {
+                            Divider().padding(.leading, 54)
+                        }
                     }
-                }
+            }
         }
     }
 
-    private func queueRow(_ item: ClipboardItem, position: Int) -> some View {
-        HStack(spacing: 8) {
+    private func queueRow(
+        entry: PasteQueueEntry,
+        item: ClipboardItem,
+        position: Int
+    ) -> some View {
+        let isHovered = hoveredEntryID == entry.id
+
+        return HStack(spacing: 8) {
             Text("\(position)")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.tertiary)
@@ -119,16 +162,54 @@ struct LiveQueueHUDView: View {
                     .lineLimit(1)
                 Text(rowDetail(for: item, position: position))
                     .font(.system(size: 9.5))
-                    .foregroundStyle(position == 1 && environment.isLiveQueueActive ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(
+                        position == 1 && environment.isLiveQueueActive
+                            ? Color.accentColor
+                            : Color.secondary
+                    )
             }
 
             Spacer(minLength: 4)
+
+            HStack(spacing: 2) {
+                if position > 1 {
+                    Button {
+                        environment.moveQueuedEntryToFront(id: entry.id)
+                    } label: {
+                        Image(systemName: "arrow.up.to.line")
+                            .font(.system(size: 10, weight: .medium))
+                            .frame(width: 18, height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .help("Make this the next item")
+                }
+                Button {
+                    environment.removeQueuedEntry(id: entry.id)
+                } label: {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 10, weight: .medium))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .help("Remove from paste queue")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .opacity(isHovered ? 1 : 0)
+            .allowsHitTesting(isHovered)
         }
         .padding(.horizontal, 12)
         .frame(height: LiveQueueHUDLayout.rowHeight)
         .background {
             if position == 1 && environment.isLiveQueueActive {
                 Color.accentColor.opacity(0.06)
+            }
+        }
+        .onHover { hovering in
+            if hovering {
+                hoveredEntryID = entry.id
+            } else if hoveredEntryID == entry.id {
+                hoveredEntryID = nil
             }
         }
         .accessibilityElement(children: .combine)

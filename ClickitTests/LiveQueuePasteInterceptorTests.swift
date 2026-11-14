@@ -33,10 +33,34 @@ final class LiveQueuePasteInterceptorTests: XCTestCase {
         XCTAssertFalse(LiveQueuePasteInterceptor.isPhysicalCommandV(type: .keyDown, event: event))
     }
 
-    private func makeKeyEvent(keyCode: CGKeyCode, flags: CGEventFlags) throws -> CGEvent {
+    func testRejectsAnAutoRepeatedCommandV() throws {
+        let event = try makeKeyEvent(
+            keyCode: 0x09,
+            flags: .maskCommand,
+            autorepeat: true
+        )
+
+        XCTAssertFalse(
+            LiveQueuePasteInterceptor.isPhysicalCommandV(type: .keyDown, event: event),
+            "Holding Command-V must paste one item instead of draining the queue"
+        )
+    }
+
+    func testRecognisesTapDisablementWithoutTreatingItAsAPaste() {
+        XCTAssertTrue(LiveQueuePasteInterceptor.isTapDisabled(type: .tapDisabledByTimeout))
+        XCTAssertTrue(LiveQueuePasteInterceptor.isTapDisabled(type: .tapDisabledByUserInput))
+        XCTAssertFalse(LiveQueuePasteInterceptor.isTapDisabled(type: .keyDown))
+    }
+
+    private func makeKeyEvent(
+        keyCode: CGKeyCode,
+        flags: CGEventFlags,
+        autorepeat: Bool = false
+    ) throws -> CGEvent {
         let source = try XCTUnwrap(CGEventSource(stateID: .hidSystemState))
         let event = try XCTUnwrap(CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true))
         event.flags = flags
+        event.setIntegerValueField(.keyboardEventAutorepeat, value: autorepeat ? 1 : 0)
         return event
     }
 }

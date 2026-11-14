@@ -28,9 +28,9 @@ Don't rely on Clickit as your only copy of anything.
 - Lives in the menu bar — no Dock icon, no window to manage.
 - **Command-Shift-V** opens a compact picker on the active display. It has one job and no hold behavior.
 - **Option-Shift-S** starts the native area selector and copies the screenshot to the clipboard. Clickit records it while monitoring is active.
-- Press **Option-Shift-V** to start Live Queue, or press it again to stop and clear the queue without opening Clickit.
-- With Live Queue on, each Command-C or Option-Shift-S capture is queued automatically, including repeated copies. A compact HUD at the top-right of the main display shows the next five entries and stacks the rest. Ordinary **Command-V** pastes the next item; the queue turns itself off after the last one.
-- Adding a history item with its queue button or **Option-Return** starts Live Queue immediately. **Option-Shift-V** stops it and discards every remaining queued item.
+- Press **Option-Shift-V** to start Live Queue, or press it again to pause without losing queued items. Clear the queue from its popover bar or HUD.
+- With Live Queue on, each Command-C or Option-Shift-S capture is queued automatically, including repeated copies. A compact HUD at the top-right of the main display shows the next five entries and stacks the rest. Ordinary **Command-V** pastes the next item; the queue turns itself off after the last one, and holds at most 100 positions.
+- Adding a history item with its queue button or **Option-Return** starts Live Queue immediately. Repeated copies become separate queue positions you can remove one at a time or move to the front. Pausing with **Option-Shift-V** keeps every remaining item.
 - Records text, links, images and screenshots, sorted by type automatically.
 - Search as you type. Pin what you want to keep; delete the rest.
 - Copy the same thing twice and the existing entry moves up instead of piling on a duplicate.
@@ -100,7 +100,7 @@ On a change, Clickit:
 
 Press Command-Shift-V in any app and a compact picker opens at the lower-right of the active display. Pick an item and it pastes there. This shortcut never toggles Live Queue.
 
-For repeated entry, press Option-Shift-V and keep copying normally, or stage existing history rows with their queue button or Option-Return. Staging the first history item starts Live Queue, so Command-V can paste it immediately without another enable step. The read-only queue HUD stays on the main display without taking focus, shows up to five numbered entries with image previews, and stacks any overflow. While Live Queue is active, each ordinary Command-V stages the next item and then passes your original paste keystroke through unchanged. The final item turns Live Queue off automatically. Pressing Option-Shift-V while it is active stops the session and discards every remaining item; the clear button does the same. The queue holds item references in memory only and clears when Clickit quits.
+For repeated entry, press Option-Shift-V and keep copying normally, or stage existing history rows with their queue button or Option-Return. Staging the first history item starts Live Queue, so Command-V can paste it immediately without another enable step. The HUD stays on the main display without taking focus, shows up to five numbered entries with image previews, and stacks any overflow. Each row can be hovered to remove that position or move it to the front. While Live Queue is active, each ordinary Command-V stages the next item and then passes your original paste keystroke through unchanged. The final item turns Live Queue off automatically. Pressing Option-Shift-V while it is active pauses the session and keeps every remaining item; the clear button discards them. If keyboard monitoring is unavailable, use the HUD or popover copy-next control to advance manually. Holding Command-V advances one item, not several. Repeated copies are separate positions, so removing one does not remove the others. The queue holds item references in memory only and clears when Clickit quits. It is capped at 100 positions; once full, new copies are not added and the popover reports the limit.
 
 Picker positioning and automatic picker paste need macOS Accessibility permission. Live Queue uses that authorization plus Input Monitoring because it must stage the next queued payload before your physical Command-V reaches the current app. The monitor exists only while Live Queue is active and never suppresses or replaces Command-V.
 
@@ -118,6 +118,8 @@ Everything lives on your Mac:
 
 Text and metadata go in a local SQLite database. Image bytes are kept as separate files, with only the filename on the entry, and the list renders from small cached thumbnails — so browsing history never pages full-size screenshots into memory. The database is read in once at launch and kept as a write-through cache: search stays instant while every change commits to disk immediately. If Application Support is unavailable, Clickit logs the failure, keeps history in memory, and uses a temporary local directory for images rather than refusing to launch.
 
+The data directory is marked excluded from Time Machine and other backups that honour the standard resource value, so clipboard history is not copied to an external or network destination without the user asking. Copies larger than 25 MB are skipped and reported instead of being written to disk; the limit is configurable in Settings.
+
 ### How long history is kept
 
 Two mechanisms, in the order they usually fire.
@@ -129,6 +131,7 @@ Two mechanisms, in the order they usually fire.
 | Setting | Default |
 | --- | --- |
 | Maximum items | 1,000 |
+| Maximum item size | 25 MB |
 | Maximum storage | 500 MB |
 | Text and link retention | 30 days |
 | Image and screenshot retention | 7 days |
@@ -172,7 +175,7 @@ These work globally while Clickit is running:
 | Key | Action |
 | --- | --- |
 | Option-Shift-S | Select an area and copy the screenshot to the clipboard |
-| Option-Shift-V | Start Live Queue, or stop and clear it while active |
+| Option-Shift-V | Start Live Queue, or pause and resume it while active |
 | Command-Shift-V | Open the clipboard picker on the active display |
 | Command-V | Paste the next item while Live Queue is active; paste normally otherwise |
 
@@ -182,7 +185,7 @@ Inside the popover:
 | --- | --- |
 | Up / Down | Move through history |
 | Return | Restore the selected item and close |
-| Option-Return | Add or remove the selected item; adding starts Live Queue |
+| Option-Return | Add to, or remove one copy from, the paste queue; adding starts Live Queue |
 | Command-1 to 9 | Restore by position |
 | Escape | Clear the search, or close if it's empty |
 | Command-F | Focus the search field |

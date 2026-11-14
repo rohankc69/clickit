@@ -15,6 +15,10 @@ struct KeyboardShortcutConfiguration: Codable, Equatable, Sendable {
         NSEvent.ModifierFlags(rawValue: modifierFlagsRawValue)
     }
 
+    /// Virtual key code for V, shared by every paste-shaped shortcut and by the
+    /// Live Queue event tap so the two cannot silently fall out of sync.
+    static let virtualKeyV: UInt16 = 0x09
+
     /// Command-Shift-V: the same fingers as paste with one extra key, which is
     /// as close to a convention as "paste, but let me choose which one" has.
     ///
@@ -23,7 +27,7 @@ struct KeyboardShortcutConfiguration: Codable, Equatable, Sendable {
     /// own search field, and would leave the user unable to paste at all if
     /// Clickit ever stopped responding.
     static let `default` = KeyboardShortcutConfiguration(
-        keyCode: 0x09,
+        keyCode: virtualKeyV,
         modifierFlagsRawValue: NSEvent.ModifierFlags([.command, .shift]).rawValue
     )
 
@@ -34,10 +38,11 @@ struct KeyboardShortcutConfiguration: Codable, Equatable, Sendable {
         modifierFlagsRawValue: NSEvent.ModifierFlags([.option, .shift]).rawValue
     )
 
-    /// Option-Shift-V toggles Live Queue. While active, a temporary event tap
-    /// prepares queued content before passing physical Command-V through.
+    /// Option-Shift-V pauses or resumes Live Queue. While active, a temporary
+    /// event tap prepares queued content before passing physical Command-V
+    /// through. Pausing keeps the queue intact.
     static let toggleLiveQueue = KeyboardShortcutConfiguration(
-        keyCode: 0x09,
+        keyCode: virtualKeyV,
         modifierFlagsRawValue: NSEvent.ModifierFlags([.option, .shift]).rawValue
     )
 
@@ -93,7 +98,7 @@ enum GlobalShortcutAction: UInt32, Sendable {
         switch self {
         case .openClickit: "open Clickit"
         case .captureSelection: "capture selection"
-        case .toggleLiveQueue: "toggle Live Queue"
+        case .toggleLiveQueue: "pause or resume Live Queue"
         }
     }
 }

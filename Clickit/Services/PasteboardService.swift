@@ -137,7 +137,22 @@ final class PasteboardService: PasteboardServicing {
             pasteboard.setString(url.absoluteString, forType: .string)
         case .image(let data):
             pasteboard.setData(data, forType: .png)
+            // Some AppKit apps negotiate only `public.tiff`, so a PNG-only
+            // pasteboard looks empty to them. PNG stays the canonical stored
+            // format; the TIFF representation exists only for this write.
+            if let tiff = Self.tiffRepresentation(of: data) {
+                pasteboard.setData(tiff, forType: .tiff)
+            }
         }
         return pasteboard.changeCount
+    }
+
+    /// Converts the stored PNG back to TIFF for apps that ask for it.
+    ///
+    /// Returns `nil` rather than failing the whole restore: the PNG flavour is
+    /// already on the pasteboard, which is enough for the vast majority of
+    /// targets.
+    private static func tiffRepresentation(of png: Data) -> Data? {
+        NSBitmapImageRep(data: png)?.representation(using: .tiff, properties: [:])
     }
 }

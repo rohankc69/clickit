@@ -91,7 +91,7 @@ struct ClipboardItemRow: View {
                     systemName: queuePosition == nil ? "plus.square" : "minus.square",
                     help: queuePosition == nil
                         ? "Add to paste queue and start Live Queue"
-                        : "Remove from paste queue",
+                        : "Remove one copy from paste queue",
                     action: onToggleQueue
                 )
                 actionButton(

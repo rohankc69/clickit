@@ -8,6 +8,13 @@ struct ClickitSettings: Codable, Equatable, Sendable {
     /// but still count toward the total.
     var maxItems: Int
     var maxStorageBytes: Int
+    /// Copies larger than this are skipped rather than written to the store.
+    ///
+    /// Without a bound, one large text or image copy can stall the main actor,
+    /// blow past the storage budget in a single write, and sit in memory for
+    /// the rest of the session. Skipping is reported to the user instead of
+    /// silently dropping the copy.
+    var maxItemBytes: Int
     var textRetentionDays: Int
     var imageRetentionDays: Int
 
@@ -64,6 +71,7 @@ struct ClickitSettings: Codable, Equatable, Sendable {
     static let `default` = ClickitSettings(
         maxItems: 1_000,
         maxStorageBytes: FileSizeFormatter.megabytes(500),
+        maxItemBytes: FileSizeFormatter.megabytes(25),
         textRetentionDays: 30,
         imageRetentionDays: 7,
         pollInterval: 0.5,
@@ -101,6 +109,8 @@ extension ClickitSettings {
                 ?? fallback.maxItems,
             maxStorageBytes: try container.decodeIfPresent(Int.self, forKey: .maxStorageBytes)
                 ?? fallback.maxStorageBytes,
+            maxItemBytes: try container.decodeIfPresent(Int.self, forKey: .maxItemBytes)
+                ?? fallback.maxItemBytes,
             textRetentionDays: try container.decodeIfPresent(Int.self, forKey: .textRetentionDays)
                 ?? fallback.textRetentionDays,
             imageRetentionDays: try container.decodeIfPresent(Int.self, forKey: .imageRetentionDays)

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The Live Queue HUD is interactive: pause or resume, copy the next item, clear the queue, and remove or move individual positions to the front on hover
+- A copy-next fallback keeps the queue usable when Command-V monitoring is unavailable
+
+### Fixed
+
+- Holding Command-V while Live Queue is active now pastes only one item; auto-repeated key-down events are ignored
+- Preparing a queued screenshot no longer reads image data inside the event-tap callback, so slow disk access cannot get the tap disabled by macOS
+
+### Changed
+
+- Option-Shift-V now pauses and resumes Live Queue instead of discarding the queue; clearing is an explicit action from the popover or HUD
+- Repeated copies of the same item are separate queue positions, so removing one no longer removes every copy
+- Live Queue now caps the queue at 100 positions and reports when a copy was not added
+
 ## [0.3.0] - 2026-07-22
 
 ### Added

@@ -2,8 +2,8 @@ import AppKit
 import Observation
 import SwiftUI
 
-/// Read-only floating surface that never takes focus from the app receiving
-/// copies and queued pastes.
+/// Floating surface that keeps queue controls available without taking focus
+/// from the app receiving copies and queued pastes.
 final class LiveQueueHUDPanel: NSPanel {
     init(contentRect: NSRect) {
         super.init(
@@ -21,7 +21,8 @@ final class LiveQueueHUDPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
-        ignoresMouseEvents = true
+        ignoresMouseEvents = false
+        becomesKeyOnlyIfNeeded = true
         isExcludedFromWindowsMenu = true
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         animationBehavior = .utilityWindow
@@ -34,14 +35,24 @@ final class LiveQueueHUDPanel: NSPanel {
 @MainActor
 final class LiveQueueHUDController {
     private let environment: AppEnvironment
+    private let pasteSimulator: PasteSimulating
+    private let accessibility: AccessibilityAuthorizing
     private let panel: LiveQueueHUDPanel
     private var screenObserver: NSObjectProtocol?
 
-    init(environment: AppEnvironment) {
+    init(
+        environment: AppEnvironment,
+        pasteSimulator: PasteSimulating,
+        accessibility: AccessibilityAuthorizing
+    ) {
         self.environment = environment
+        self.pasteSimulator = pasteSimulator
+        self.accessibility = accessibility
         panel = LiveQueueHUDPanel(contentRect: .zero)
 
-        let root = LiveQueueHUDView(environment: environment)
+        let root = LiveQueueHUDView(environment: environment) { [weak self] in
+            self?.pasteNext()
+        }
         panel.contentView = NSHostingView(rootView: root)
 
         updatePresentation()
@@ -52,6 +63,37 @@ final class LiveQueueHUDController {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.updatePresentation() }
+        }
+    }
+
+    /// Copies the head of the queue, then pastes it when auto-paste is on and
+    /// Accessibility is available. This is the manual fallback for a missing
+    /// Input Monitoring grant.
+    private func pasteNext() {
+        guard environment.advancePasteQueue() != nil else { return }
+
+        guard environment.settingsStore.settings.autoPasteEnabled else {
+            // The item is on the clipboard. Pause so the user's own Command-V
+            // pastes it instead of advancing to the following position.
+            environment.pauseLiveQueue()
+            return
+        }
+        guard accessibility.isTrusted else {
+            environment.pauseLiveQueue()
+            environment.reportAutoPasteUnavailable()
+            return
+        }
+        // Clicking the HUD must not paste into Clickit itself.
+        guard NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            != Bundle.main.bundleIdentifier
+        else {
+            environment.pauseLiveQueue()
+            return
+        }
+
+        if !pasteSimulator.pasteIntoFrontmostApplication() {
+            environment.pauseLiveQueue()
+            environment.reportAutoPasteUnavailable()
         }
     }
 

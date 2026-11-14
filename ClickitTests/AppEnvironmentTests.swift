@@ -82,6 +82,40 @@ final class AppEnvironmentTests: ClickitTestCase {
         XCTAssertEqual(filesOnDisk.count, 1)
     }
 
+    // MARK: - Size limit
+
+    func testOversizedCopyIsSkipped() {
+        environment.settingsStore.settings.maxItemBytes = 8
+        pasteboard.stage(.text("123456789"))
+        environment.monitor.poll()
+
+        XCTAssertTrue(environment.items.isEmpty)
+        XCTAssertEqual(environment.captureCount, 0)
+        XCTAssertNotNil(environment.lastErrorMessage)
+    }
+
+    func testCopyAtTheSizeLimitIsKept() {
+        environment.settingsStore.settings.maxItemBytes = 9
+        pasteboard.stage(.text("123456789"))
+        environment.monitor.poll()
+
+        XCTAssertEqual(environment.items.count, 1)
+        XCTAssertEqual(environment.items.first?.textContent, "123456789")
+        XCTAssertEqual(environment.captureCount, 1)
+        XCTAssertNil(environment.lastErrorMessage)
+    }
+
+    func testOversizedImageIsNotWrittenToDisk() throws {
+        environment.settingsStore.settings.maxItemBytes = 64
+        pasteboard.stage(.image(data: Data(repeating: 0xAA, count: 65)))
+        environment.monitor.poll()
+
+        XCTAssertTrue(environment.items.isEmpty)
+        XCTAssertEqual(environment.captureCount, 0)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: imageDirectory.path).count, 0)
+        XCTAssertNotNil(environment.lastErrorMessage)
+    }
+
     // MARK: - Restore
 
     func testRestoringPutsTextBackOnThePasteboard() throws {
@@ -370,7 +404,7 @@ final class AppEnvironmentTests: ClickitTestCase {
         XCTAssertEqual(interceptor.activationCount, 1)
 
         XCTAssertEqual(interceptor.triggerCommandV(), true)
-        XCTAssertEqual(environment.pasteQueue, [second.id])
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [second.id])
         XCTAssertTrue(environment.isLiveQueueActive)
 
         XCTAssertEqual(interceptor.triggerCommandV(), false)
@@ -381,7 +415,7 @@ final class AppEnvironmentTests: ClickitTestCase {
         XCTAssertFalse(interceptor.isActive)
     }
 
-    func testOptionShiftVKillsAManuallyCreatedQueue() throws {
+    func testOptionShiftVPausesAManuallyCreatedQueueWithoutDiscardingIt() throws {
         let shortcuts = StubShortcutService()
         let interceptor = StubLiveQueuePasteInterceptor()
         environment = makeEnvironment(
@@ -390,7 +424,7 @@ final class AppEnvironmentTests: ClickitTestCase {
             liveQueuePasteInterceptor: interceptor
         )
         environment.start()
-        pasteboard.stage(.text("discard me"))
+        pasteboard.stage(.text("keep me"))
         environment.monitor.poll()
         let item = try XCTUnwrap(environment.items.first)
 
@@ -399,7 +433,7 @@ final class AppEnvironmentTests: ClickitTestCase {
 
         XCTAssertFalse(environment.isLiveQueueActive)
         XCTAssertFalse(interceptor.isActive)
-        XCTAssertTrue(environment.pasteQueue.isEmpty)
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [item.id])
     }
 
     func testManualQueueActivationFailureKeepsTheItemQueued() throws {
@@ -418,7 +452,7 @@ final class AppEnvironmentTests: ClickitTestCase {
 
         environment.togglePasteQueue(item)
 
-        XCTAssertEqual(environment.pasteQueue, [item.id])
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [item.id])
         XCTAssertFalse(environment.isLiveQueueActive)
         XCTAssertFalse(interceptor.isActive)
         XCTAssertEqual(environment.lastErrorMessage, "permission denied")
@@ -437,10 +471,28 @@ final class AppEnvironmentTests: ClickitTestCase {
 
         let item = try XCTUnwrap(environment.items.first)
         XCTAssertEqual(environment.items.count, 1)
-        XCTAssertEqual(environment.pasteQueue, [item.id, item.id])
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [item.id, item.id])
     }
 
-    func testOptionShiftVKillsLiveQueueAndClearsCapturedItems() throws {
+    func testPasteQueueStopsAcceptingItemsAtTheLimit() {
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            liveQueuePasteInterceptor: interceptor
+        )
+
+        for index in 0...AppEnvironment.pasteQueueLimit {
+            let item = makeTextItem("queued \(index)")
+            store.insert(item)
+            environment.togglePasteQueue(item)
+        }
+
+        XCTAssertEqual(environment.pasteQueue.count, AppEnvironment.pasteQueueLimit)
+        XCTAssertEqual(environment.lastErrorMessage, AppEnvironment.pasteQueueFullMessage)
+        XCTAssertTrue(environment.isLiveQueueActive)
+    }
+
+    func testOptionShiftVPausesLiveQueueAndKeepsCapturedItems() throws {
         let shortcuts = StubShortcutService()
         let interceptor = StubLiveQueuePasteInterceptor()
         environment = makeEnvironment(
@@ -453,13 +505,131 @@ final class AppEnvironmentTests: ClickitTestCase {
         pasteboard.stage(.text("keep queued"))
         environment.monitor.poll()
         let queuedID = try XCTUnwrap(environment.items.first?.id)
-        XCTAssertEqual(environment.pasteQueue, [queuedID])
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [queuedID])
 
         shortcuts.trigger(.toggleLiveQueue)
 
         XCTAssertFalse(environment.isLiveQueueActive)
         XCTAssertFalse(interceptor.isActive)
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [queuedID])
+    }
+
+    func testPausedLiveQueueResumesWithoutLosingPositions() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        pasteboard.stage(.text("queued"))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+        environment.togglePasteQueue(item)
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertEqual(environment.pasteQueue.count, 1)
+
+        shortcuts.trigger(.toggleLiveQueue)
+
+        XCTAssertTrue(environment.isLiveQueueActive)
+        XCTAssertTrue(interceptor.isActive)
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [item.id])
+
+        XCTAssertEqual(interceptor.triggerCommandV(), false)
+        XCTAssertEqual(pasteboard.writtenPayloads, [.text("queued")])
+    }
+
+    func testAdvancePasteQueueCopiesTheHeadWhilePaused() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        pasteboard.stage(.text("first"))
+        environment.monitor.poll()
+        let first = try XCTUnwrap(environment.items.first)
+        pasteboard.stage(.text("second"))
+        environment.monitor.poll()
+        let second = try XCTUnwrap(environment.items.first)
+        environment.togglePasteQueue(first)
+        environment.togglePasteQueue(second)
+        shortcuts.trigger(.toggleLiveQueue)
+
+        let advanced = environment.advancePasteQueue()
+
+        XCTAssertEqual(advanced?.id, first.id)
+        XCTAssertEqual(pasteboard.writtenPayloads, [.text("first")])
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [second.id])
+        XCTAssertFalse(environment.isLiveQueueActive)
+    }
+
+    func testTogglePasteQueueRemovesOnlyOneCopyAtATime() throws {
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.toggleLiveQueue()
+        pasteboard.stage(.text("repeated"))
+        environment.monitor.poll()
+        pasteboard.stage(.text("repeated"))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+        XCTAssertEqual(environment.pasteQueue.count, 2)
+
+        environment.togglePasteQueue(item)
+
+        XCTAssertEqual(environment.pasteQueue.count, 1)
+        XCTAssertEqual(environment.pasteQueue.first?.itemID, item.id)
+        XCTAssertTrue(environment.isLiveQueueActive)
+
+        environment.togglePasteQueue(item)
+
         XCTAssertTrue(environment.pasteQueue.isEmpty)
+        XCTAssertFalse(environment.isLiveQueueActive)
+    }
+
+    func testQueuePositionsCanBeReorderedAndRemovedIndividually() throws {
+        environment = makeEnvironment()
+        let first = makeTextItem("first")
+        let second = makeTextItem("second")
+        store.insert(first)
+        store.insert(second)
+        environment.togglePasteQueue(first)
+        environment.togglePasteQueue(second)
+        let secondEntry = try XCTUnwrap(environment.pasteQueue.last)
+
+        environment.moveQueuedEntryToFront(id: secondEntry.id)
+
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [second.id, first.id])
+
+        environment.removeQueuedEntry(id: secondEntry.id)
+
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [first.id])
+    }
+
+    func testDuplicatePositionsRemainIndependentlyRemovable() throws {
+        environment = makeEnvironment(pasteboard: pasteboard)
+        environment.toggleLiveQueue()
+        pasteboard.stage(.text("same"))
+        environment.monitor.poll()
+        pasteboard.stage(.text("same"))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
+        XCTAssertEqual(environment.pasteQueue.count, 2)
+        let firstEntry = try XCTUnwrap(environment.pasteQueue.first)
+
+        environment.removeQueuedEntry(id: firstEntry.id)
+
+        XCTAssertEqual(environment.pasteQueue.count, 1)
+        XCTAssertEqual(environment.pasteQueue.first?.itemID, item.id)
+        XCTAssertNotEqual(environment.pasteQueue.first?.id, firstEntry.id)
     }
 
     func testCommandVWithAnEmptyQueueAutomaticallyStopsLiveQueue() {
@@ -496,7 +666,7 @@ final class AppEnvironmentTests: ClickitTestCase {
 
         interceptor.triggerFailure()
 
-        XCTAssertEqual(environment.pasteQueue, [item.id])
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [item.id])
         XCTAssertFalse(environment.isLiveQueueActive)
         XCTAssertNotNil(environment.lastErrorMessage)
     }
@@ -548,6 +718,37 @@ final class AppEnvironmentTests: ClickitTestCase {
         pasteboard.stage(.image(data: Data(repeating: 0x44, count: 64)))
         environment.monitor.poll()
         let item = try XCTUnwrap(environment.items.first)
+        // Delete before staging so the prefetch cannot cache the bytes and the
+        // paste path has to report the missing file.
+        try FileManager.default.removeItem(
+            at: imageStorage.url(forRelativePath: try XCTUnwrap(item.imagePath))
+        )
+        environment.togglePasteQueue(item)
+
+        XCTAssertEqual(interceptor.triggerCommandV(), false)
+
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [item.id])
+        XCTAssertFalse(environment.isLiveQueueActive)
+        XCTAssertTrue(pasteboard.writtenPayloads.isEmpty)
+        XCTAssertNotNil(environment.lastErrorMessage)
+    }
+
+    /// Payloads are prepared before the tap runs, so a queued image whose file
+    /// disappears after staging can still be pasted without reading the disk
+    /// inside the event-tap callback.
+    func testQueuedImageUsesPreparedPayloadAfterItsFileDisappears() throws {
+        let shortcuts = StubShortcutService()
+        let interceptor = StubLiveQueuePasteInterceptor()
+        environment = makeEnvironment(
+            pasteboard: pasteboard,
+            shortcuts: shortcuts,
+            liveQueuePasteInterceptor: interceptor
+        )
+        environment.start()
+        let data = Data(repeating: 0x66, count: 96)
+        pasteboard.stage(.image(data: data))
+        environment.monitor.poll()
+        let item = try XCTUnwrap(environment.items.first)
         environment.togglePasteQueue(item)
         try FileManager.default.removeItem(
             at: imageStorage.url(forRelativePath: try XCTUnwrap(item.imagePath))
@@ -555,10 +756,9 @@ final class AppEnvironmentTests: ClickitTestCase {
 
         XCTAssertEqual(interceptor.triggerCommandV(), false)
 
-        XCTAssertEqual(environment.pasteQueue, [item.id])
+        XCTAssertEqual(pasteboard.writtenPayloads, [.image(data: data)])
+        XCTAssertTrue(environment.pasteQueue.isEmpty)
         XCTAssertFalse(environment.isLiveQueueActive)
-        XCTAssertTrue(pasteboard.writtenPayloads.isEmpty)
-        XCTAssertNotNil(environment.lastErrorMessage)
     }
 
     func testDeletingTheFinalQueuedItemStopsLiveQueue() throws {
@@ -594,7 +794,7 @@ final class AppEnvironmentTests: ClickitTestCase {
 
         environment.clearHistory()
 
-        XCTAssertEqual(environment.pasteQueue, [pinned.id])
+        XCTAssertEqual(environment.pasteQueue.map(\.itemID), [pinned.id])
         XCTAssertTrue(environment.isLiveQueueActive)
         XCTAssertTrue(interceptor.isActive)
     }

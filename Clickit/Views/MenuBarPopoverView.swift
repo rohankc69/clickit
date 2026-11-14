@@ -183,17 +183,32 @@ struct MenuBarPopoverView: View {
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            if !environment.pasteQueue.isEmpty {
-                Button {
-                    environment.clearPasteQueue()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
-                        .contentShape(Rectangle())
+            // While active, Command-V is the normal path. Offering copy-next
+            // here as well would leave a physical Command-V free to advance a
+            // second time.
+            if !environment.pasteQueue.isEmpty, !environment.isLiveQueueActive {
+                queueActionButton(
+                    systemName: "doc.on.clipboard",
+                    help: "Copy the next queued item"
+                ) {
+                    pasteNextQueuedItem()
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Clear paste queue")
+            }
+
+            queueActionButton(
+                systemName: environment.isLiveQueueActive ? "pause.fill" : "play.fill",
+                help: environment.isLiveQueueActive ? "Pause Live Queue" : "Resume Live Queue"
+            ) {
+                environment.toggleLiveQueue()
+            }
+
+            if !environment.pasteQueue.isEmpty {
+                queueActionButton(
+                    systemName: "xmark.circle.fill",
+                    help: "Clear paste queue"
+                ) {
+                    environment.clearPasteQueue()
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -216,19 +231,39 @@ struct MenuBarPopoverView: View {
                     .foregroundStyle(.secondary)
             }
         } else {
-            Image(systemName: "rectangle.stack.fill")
+            Image(systemName: "pause.circle.fill")
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(environment.pasteQueue.count) queued")
+                Text("Paused - \(environment.pasteQueue.count) queued")
                     .font(.system(size: 11, weight: .semibold))
                 if let next = environment.nextQueuedItem {
                     Text("Next: \(next.previewText)")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                } else {
+                    Text("Resume to keep pasting")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
+    }
+
+    private func queueActionButton(
+        systemName: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12))
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help(help)
     }
 
     private var footer: some View {
@@ -288,6 +323,14 @@ struct MenuBarPopoverView: View {
 
     private func restore(_ item: ClipboardItem) {
         environment.restore(item)
+        onClose()
+        onActivate()
+    }
+
+    /// Copies the next queue position and removes it. This keeps the queue
+    /// usable when Command-V monitoring is unavailable.
+    private func pasteNextQueuedItem() {
+        guard environment.advancePasteQueue() != nil else { return }
         onClose()
         onActivate()
     }

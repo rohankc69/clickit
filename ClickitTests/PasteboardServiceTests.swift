@@ -155,6 +155,17 @@ final class PasteboardServiceTests: XCTestCase {
         XCTAssertEqual(pasteboard.data(forType: .png), png)
     }
 
+    /// Apps that negotiate only `public.tiff` still get a usable image.
+    func testWritingAnImageAlsoWritesTIFF() throws {
+        let png = try makePNG()
+        service.write(.image(data: png))
+
+        let tiff = try XCTUnwrap(pasteboard.data(forType: .tiff))
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: tiff))
+        XCTAssertEqual(bitmap.pixelsWide, 4)
+        XCTAssertEqual(bitmap.pixelsHigh, 4)
+    }
+
     // MARK: - Helpers
 
     private func makeBitmap() throws -> NSBitmapImageRep {

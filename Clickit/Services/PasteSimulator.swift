@@ -24,7 +24,7 @@ protocol PasteSimulating: AnyObject {
 @MainActor
 final class PasteSimulator: PasteSimulating {
     private let accessibility: AccessibilityAuthorizing
-    private static let virtualKeyV: CGKeyCode = 0x09
+    private static let virtualKeyV: CGKeyCode = KeyboardShortcutConfiguration.virtualKeyV
 
     init(accessibility: AccessibilityAuthorizing) {
         self.accessibility = accessibility
