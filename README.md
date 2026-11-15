@@ -14,6 +14,8 @@ Early, and unsigned. The loop works — copy, search, restore, paste — history
 
 Don't rely on Clickit as your only copy of anything.
 
+This round is a maintenance push: documentation and housekeeping only. No application code changed, so the build is the same as the last release — treat the update as a notes refresh, not a new version to install.
+
 | Working | Not yet |
 | --- | --- |
 | Menu-bar popover: search, pin, delete | Signed, notarized release |
